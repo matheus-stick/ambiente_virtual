@@ -1,11 +1,13 @@
 import streamlit as st
 from functions.db_utils import save_to_csv, load_csv
 
+st.title('Página de Cadastros!')
+
 col1, col2, col3 = st.columns(3)
 
 with col1:
     # --- Cadastro de Categorias ---
-    st.header("Cadastrar Nova Categoria")
+    st.subheader("Cadastrar Nova Categoria")
     categoria = st.text_input("Nome da Categoria")
     if st.button("Cadastrar Categoria"):
         if categoria.strip():
@@ -16,7 +18,7 @@ with col1:
 
 with col2:
     # --- Cadastro de Marcas ---
-    st.header("Cadastrar Nova Marca")
+    st.subheader("Cadastrar Nova Marca")
     marca = st.text_input("Nome da Marca")
     if st.button("Cadastrar Marca"):
         if marca.strip():
@@ -27,7 +29,7 @@ with col2:
 
 with col3:
     # --- Cadastro de Fornecedores ---
-    st.header("Cadastrar Novo Fornecedor")
+    st.subheader("Cadastrar Novo Fornecedor")
     fornecedor = st.text_input("Nome do Fornecedor")
     if st.button("Cadastrar Fornecedor"):
         if fornecedor.strip():
