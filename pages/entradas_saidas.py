@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 from unidecode import unidecode
-from functions.db_utils import load_dim_produtos
+from functions.db_utils import load_dim_produtos, _norm, filtra_produtos
 
 #LEITURA DO ARQUIVO DE DIMENSAO DO PRODUTO
 
@@ -13,28 +13,8 @@ tipo_produto = dim_produto['tipo'].unique()
 
 descricao_produto = dim_produto['descricao'].unique()
 
-## CRIANDO CAMPOS DE SELECAO
-
-def _norm(s: str) -> str:
-    return unidecode((str(s) or "").strip().lower())
-
-def filtra_produtos(df: pd.DataFrame, query: str, top_n: int = 10) -> list[str]:
-    """Filtra a coluna 'descricao' por contains insensível a acento/caixa."""
-    if not query:
-        return []
-    q = _norm(query)
-    mask = df["descricao"].astype(str).map(_norm).str.contains(q, na=False)
-    return (
-        df.loc[mask, "descricao"]
-        .dropna()
-        .astype(str)
-        .drop_duplicates()
-        .head(top_n)
-        .tolist()
-    )
-
 # =========================
-# UI
+# UX
 # =========================
 st.subheader("Entradas / Saídas — Seleção de Produto")
 
@@ -46,25 +26,23 @@ df_tipo = dim_produto.loc[dim_produto["tipo"] == tipo_escolhido].copy()
 
 # 2) Campo de busca (autocomplete)
 st.write("### 🔎 Buscar produto (por descrição)")
-col1, col2 = st.columns([2, 1])  # <-- sem vertical_alignment (compatível com 1.34)
+
+query_desc = st.text_input(
+    "Nome do produto",
+    placeholder="Digite parte da descrição… (ex.: arroz, feijao, vinho)",
+    help="A busca ignora acentos e maiúsculas/minúsculas.",
+    key="query_produto",
+)
+
+col1, col2 = st.columns([2, 1])
+
+sugestoes_desc = filtra_produtos(df_tipo, query_desc, top_n=25) if not df_tipo.empty else []
 
 with col1:
-    query_desc = st.text_input(
-        "Nome / parte do nome",
-        placeholder="Digite parte da descrição… (ex.: arroz, feijao, vinho)",
-        help="A busca ignora acentos e maiúsculas/minúsculas.",
-        key="query_produto",
-    )
-
-sugestoes_desc = filtra_produtos(df_tipo, query_desc, top_n=10) if not df_tipo.empty else []
-
-with col2:
-    st.caption("Sugestões")
     descricao_produto_sel = st.selectbox(
-        "Resultados",
+        "Sugestões",
         options=(sugestoes_desc if sugestoes_desc else ["— sem resultados —"]),
         index=0,
-        label_visibility="collapsed",
         key="descricao_produto",
     )
 
@@ -78,10 +56,11 @@ if descricao_produto_sel and descricao_produto_sel != "— sem resultados —":
         .tolist()
     )
 
-if unidade_options:
-    unidade_sel = st.selectbox("Unidade de medida", unidade_options, key="unidade_de_medida")
-else:
-    st.info("Selecione um produto para carregar a unidade de medida.")
+with col2:
+    if unidade_options:
+        unidade_sel = st.selectbox(label="Unidade de medida",options= unidade_options, key="unidade_de_medida")
+    else:
+        st.info("Selecione um produto para carregar a unidade de medida.")
 
 # 4) (Opcional) Exibição do contexto selecionado
 if descricao_produto_sel and descricao_produto_sel != "— sem resultados —":
