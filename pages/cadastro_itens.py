@@ -46,6 +46,8 @@ categorias = load_csv("categorias.csv", ["categoria"])["categoria"].tolist()
 marcas = load_csv("marcas.csv", ["marca"])["marca"].tolist()
 fornecedores = load_csv("fornecedores.csv", ["fornecedor"])["fornecedor"].tolist()
 
+# abaixo não foi avaliado ainda se está funcional e fazendo sentido
+
 categoria_produto = st.selectbox("Categoria", categorias)
 marca_produto = st.selectbox("Marca", marcas)
 fornecedor_produto = st.selectbox("Fornecedor", fornecedores)

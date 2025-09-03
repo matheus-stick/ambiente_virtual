@@ -1,27 +1,18 @@
 import pandas as pd
+from unidecode import unidecode
 import os
 
-DATA_DIR = "data"
+def load_dim_produtos(file_path='data/dim_produtos.xlsx'):
+    dim_produto = pd.read_excel('data/dim_produtos.xlsx',index_col=False)
 
-def ensure_data_dir():
-    if not os.path.exists(DATA_DIR):
-        os.makedirs(DATA_DIR)
+    #TRATAMENTO DAS COLUNAS PARA PADRONIZAÇÃO, RETIRANDO ACENTOS, ESPAÇOS E COLOCANDO TUDO EM MINÚSCULO
 
-def save_to_csv(filename, data, columns):
-    ensure_data_dir()
-    file_path = os.path.join(DATA_DIR, filename)
-    if os.path.exists(file_path):
-        df = pd.read_csv(file_path)
-        df = pd.concat([df, pd.DataFrame([data], columns=columns)], ignore_index=True)
-    else:
-        df = pd.DataFrame([data], columns=columns)
-    df.drop_duplicates(inplace=True)
-    df.to_csv(file_path, index=False)
+    print(f'Colunas pré-processamento: {dim_produto.columns}')
 
-def load_csv(filename, columns):
-    ensure_data_dir()
-    file_path = os.path.join(DATA_DIR, filename)
-    if os.path.exists(file_path):
-        return pd.read_csv(file_path)
-    else:
-        return pd.DataFrame(columns=columns)
+    dim_produto.columns = [unidecode(col).lower().replace(" ", "_") for col in dim_produto.columns]
+
+    print(f'Colunas pós-processamento: {dim_produto.columns}')
+
+    print(f'Processamento finalizado!')
+
+    return dim_produto
