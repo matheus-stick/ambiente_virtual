@@ -3,6 +3,7 @@ import openpyxl
 from unidecode import unidecode
 import os
 import json
+import streamlit as st
 
 # ============================================================
 # UTILITÁRIOS DE PADRONIZAÇÃO
@@ -91,9 +92,52 @@ def verificar_disponibilidade(prato: str, estoque_path="data/estoque_inicial.xls
         else:
             qtd_disponivel = estoque_item["quantidade_disponivel"].values[0]
             if qtd_disponivel >= qtd_necessaria:
-                resultado.append(f"✅ {produto}: disponível ({qtd_disponivel} {unidade})")
+                resultado.append(f"✅ {produto}: disponível ({qtd_disponivel}/{qtd_necessaria} {unidade})")
             else:
                 resultado.append(f"⚠️ {produto}: insuficiente ({qtd_disponivel}/{qtd_necessaria} {unidade})")
                 disponivel = False
 
     return disponivel, resultado
+
+# ============================================================
+# FUNÇÃO PRINCIPAL DE ALTERAÇÃO DE ESTOQUE
+# ============================================================
+
+# Caminho do arquivo de estoque
+ESTOQUE_PATH = "data/estoque_inicial.xlsx"
+
+# ---------------- FUNÇÕES AUXILIARES ----------------
+
+def carregar_estoque(path="data/estoque_inicial.xlsx"):
+    """Carrega e padroniza o arquivo de estoque."""
+    if not os.path.exists(path):
+        return pd.DataFrame(columns=["produto", "quantidade_disponivel", "unidade"])
+    
+    df = pd.read_excel(path)
+    df.columns = [unidecode(c).strip().lower().replace(" ", "_") for c in df.columns]
+    df["produto"] = df["produto"].map(_norm)
+    return df
+
+
+def salvar_estoque(df, path="data/estoque_inicial.xlsx"):
+    """Salva o DataFrame atualizado no arquivo Excel."""
+    df.to_excel(path, index=False)
+
+
+def produtos_faltantes_no_estoque(dim_path="data/dim_produtos.xlsx", estoque_path="data/estoque_inicial.xlsx"):
+    """Retorna os produtos da dimensão que ainda não estão no estoque."""
+    if not os.path.exists(dim_path):
+        return []
+
+    df_dim = pd.read_excel(dim_path)
+    df_dim.columns = [unidecode(c).strip().lower().replace(" ", "_") for c in df_dim.columns]
+    df_dim["descricao"] = df_dim["descricao"].map(_norm)
+    df_dim["unidade_de_medida"] = df_dim["unidade_de_medida"].map(str)
+
+    df_estoque = carregar_estoque(estoque_path)
+
+    # Identificar produtos que ainda não estão no estoque
+    produtos_no_estoque = set(df_estoque["produto"].tolist())
+    produtos_faltantes = df_dim[~df_dim["descricao"].isin(produtos_no_estoque)]
+
+    return produtos_faltantes[["descricao", "unidade_de_medida"]]
