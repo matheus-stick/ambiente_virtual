@@ -1,14 +1,18 @@
 import streamlit as st
-from pages.entradas_saidas import page_entradas
+from app_pages.receitas import pagina_consulta_receitas as page_consultas
+from app_pages.receitas_cadastro import pagina_cadastro_receitas as page_saidas
 
-st.set_page_config(page_title="Gestão de Estoque", page_icon="📦")
-st.title("Gestão de Estoque")
+# ---------------- STREAMLIT ----------------
+def main():
+    st.set_page_config(page_title="Sistema de Controle de Estoque", layout="wide")
 
-menu = st.sidebar.radio(
-    "Navegação",
-    ["Entradas/Saídas"],  # adicione mais páginas aqui
-)
+    st.sidebar.title("Navegação")
+    pagina = st.sidebar.radio("Ir para:", ("Consulta de Receitas", "Cadastro de Receitas"))
 
-if menu == "Entradas/Saídas":
-    # importa e roda sua página
-    page_entradas()
+    if pagina == "Consulta de Receitas":
+        page_consultas()
+    elif pagina == "Cadastro de Receitas":
+        page_saidas()
+
+if __name__ == "__main__":
+    main()

@@ -1,67 +1,80 @@
 import pandas as pd
+import openpyxl
 from unidecode import unidecode
 import os
+import json
+
+# ============================================================
+# UTILITÁRIOS DE PADRONIZAÇÃO
+# ============================================================
+
+def _norm(s: str) -> str:
+    """Normaliza string: minúsculo, sem acento, sem espaços extras."""
+    return unidecode((str(s) or "").strip().lower())
+
+# ============================================================
+# CARREGAMENTO DE BASES
+# ============================================================
 
 def load_dim_produtos(file_path='data/dim_produtos.xlsx'):
-    dim_produto = pd.read_excel('data/dim_produtos.xlsx',index_col=False)
-
-    #TRATAMENTO DAS COLUNAS PARA PADRONIZAÇÃO, RETIRANDO ACENTOS, ESPAÇOS E COLOCANDO TUDO EM MINÚSCULO
-
-    #print(f'Colunas pré-processamento: {dim_produto.columns}')
-
+    """Carrega e padroniza a planilha de produtos."""
+    dim_produto = pd.read_excel(file_path, index_col=False)
     dim_produto.columns = [unidecode(col).lower().replace(" ", "_") for col in dim_produto.columns]
-
-    #print(f'Colunas pós-processamento: {dim_produto.columns}')
-
-    #print(f'Processamento finalizado!')
-
     return dim_produto
 
 
-def _norm(s: str) -> str:
-    return unidecode((str(s) or "").strip().lower())
+def load_receitas(file_path="data/receitas.xlsx") -> dict:
+    """Lê receitas do Excel e retorna um dicionário agrupado por prato."""
+    if not os.path.exists(file_path):
+        return {}
 
-def filtra_produtos(df: pd.DataFrame, query: str, top_n: int = 10) -> list[str]:
-    """Filtra a coluna 'descricao' por contains insensível a acento/caixa."""
-    if not query:
-        return []
-    q = _norm(query)
-    mask = df["descricao"].astype(str).map(_norm).str.contains(q, na=False)
-    return (
-        df.loc[mask, "descricao"]
-        .dropna()
-        .astype(str)
-        .drop_duplicates()
-        .head(top_n)
-        .tolist()
-    )
+    df_receitas = pd.read_excel(file_path)
 
-# Dicionário de receitas
-receitas = {
-    "Brisket com Batata Frita": [
-        {"produto": "Brisket Prime", "quantidade": 200, "unidade": "g"},
-        {"produto": "Batata frita corte fino", "quantidade": 150, "unidade": "g"},
-        {"produto": "Filtro p/ Café", "quantidade": 1, "unidade": "Un"}
-    ],
-    "Café com Copinho": [
-        {"produto": "Filtro p/ Café", "quantidade": 1, "unidade": "Un"},
-        {"produto": "Copinhos descartavel 80 ml - 100 unid", "quantidade": 1, "unidade": "Un"},
-        {"produto": "Açúcar refinado", "quantidade": 10, "unidade": "g"}
-    ],
-    "Porção de Batata com Brisket Desfiado": [
-        {"produto": "Batata frita corte fino", "quantidade": 200, "unidade": "g"},
-        {"produto": "Brisket Prime", "quantidade": 100, "unidade": "g"},
-        {"produto": "Colherinha de plástico pequena - c/500", "quantidade": 1, "unidade": "Un"}
-    ]
-}
+    # Normalizar colunas e texto
+    df_receitas.columns = [unidecode(c).strip().lower() for c in df_receitas.columns]
+    df_receitas['prato'] = df_receitas['prato'].map(_norm)
+    df_receitas['produto'] = df_receitas['produto'].map(_norm)
 
-def verificar_disponibilidade(prato: str, estoque_path="data/estoque_inicial.xlsx"):
-    # Carregar estoque
+    receitas = {}
+
+    for prato in df_receitas['prato'].unique():
+        subset = df_receitas[df_receitas['prato'] == prato]
+        ingredientes = []
+        for _, row in subset.iterrows():
+            ingredientes.append({
+                "produto": row["produto"],
+                "quantidade": row["quantidade"],
+                "unidade": row["unidade"]
+            })
+        receitas[prato] = ingredientes
+
+    return receitas
+
+
+def salvar_receitas_json(file_path_excel="data/receitas.xlsx", file_path_json="data/receitas.json"):
+    """Gera um JSON com as receitas (útil para backup ou outras integrações)."""
+    receitas = load_receitas(file_path_excel)
+    with open(file_path_json, "w", encoding="utf-8") as f:
+        json.dump(receitas, f, ensure_ascii=False, indent=4)
+    return file_path_json
+
+# ============================================================
+# FUNÇÃO PRINCIPAL DE VERIFICAÇÃO DE ESTOQUE
+# ============================================================
+
+def verificar_disponibilidade(prato: str, estoque_path="data/estoque_inicial.xlsx", receitas_path="data/receitas.xlsx"):
+    # Normalizar nome do prato
+    prato = _norm(prato)
+
+    # Carregar estoque e receitas
     df_estoque = pd.read_excel(estoque_path)
+    df_estoque['produto'] = df_estoque['produto'].map(_norm)
+    receitas = load_receitas(receitas_path)
 
-    # Ingredientes da receita escolhida
+    if prato not in receitas:
+        return False, [f"❌ Receita '{prato}' não encontrada no arquivo de receitas."]
+
     ingredientes = receitas[prato]
-
     resultado = []
     disponivel = True
 
@@ -70,7 +83,6 @@ def verificar_disponibilidade(prato: str, estoque_path="data/estoque_inicial.xls
         qtd_necessaria = item["quantidade"]
         unidade = item["unidade"]
 
-        # Buscar produto no estoque
         estoque_item = df_estoque[df_estoque["produto"] == produto]
 
         if estoque_item.empty:
