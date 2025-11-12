@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import time
 from functions.db_utils import (
     carregar_estoque,
     salvar_estoque,
@@ -33,16 +34,53 @@ def pagina_ajuste_estoque():
         if produto_selecionado:
             unidade = df_estoque.loc[df_estoque["produto"] == produto_selecionado, "unidade"].values[0]
             qtd_atual = df_estoque.loc[df_estoque["produto"] == produto_selecionado, "quantidade_disponivel"].values[0]
+            preco_atual = df_estoque.loc[df_estoque["produto"] == produto_selecionado, "preco"].values[0]
 
-            st.write(f"📦 Quantidade atual de **{produto_selecionado}**: {qtd_atual} {unidade}")
+            col_qtd, col_preco = st.columns(2)
 
-            nova_qtd = st.number_input(f"Informe a nova quantidade ({unidade}):", min_value=0.0, step=1.0, key="nova_qtd")
+            with col_qtd:
 
-            if st.button("Salvar Alteração", key="btn_salvar_existente"):
-                df_estoque.loc[df_estoque["produto"] == produto_selecionado, "quantidade_disponivel"] = nova_qtd
-                salvar_estoque(df_estoque)
-                st.success(f"✅ Quantidade de '{produto_selecionado}' atualizada com sucesso!")
-                st.experimental_rerun()  # 🔁 recarrega a página automaticamente
+                st.write(f"📦 Quantidade atual de **{produto_selecionado}**: {qtd_atual} {unidade}")
+
+                nova_qtd = st.number_input(f"Informe a nova quantidade ({unidade}):", min_value=0.0, step=1.0, key="nova_qtd")
+
+                if st.button("Salvar alteração de nova quantidade", key="btn_salvar_existente_quantidade"):
+                    df_estoque.loc[df_estoque["produto"] == produto_selecionado, "quantidade_disponivel"] = nova_qtd
+                    salvar_estoque(df_estoque)
+                    progress_text = "Alterando quantidade..."
+                    my_bar = st.progress(0, text=progress_text)
+
+                    for percent_complete in range(100):
+                        time.sleep(0.01)
+                        my_bar.progress(percent_complete + 1, text=progress_text)
+                    time.sleep(1)
+                    my_bar.empty()
+                    st.success(f"✅ Quantidade de '{produto_selecionado}' atualizada com sucesso!")
+                    time.sleep(2)
+
+                    st.rerun()  # 🔁 recarrega a página automaticamente
+            
+            with col_preco:
+
+                st.write(f"💵 Preço atual de **{produto_selecionado}**: R$ {preco_atual}")
+
+                novo_preco = st.number_input("Informe o novo preço (R$):", min_value=0.0, step=0.01, format="%.2f", key="novo_preco")
+
+                if st.button("Salvar alteração de novo preço", key="btn_salvar_existente_preco"):
+                    df_estoque.loc[df_estoque["produto"] == produto_selecionado, "preco"] = novo_preco
+                    salvar_estoque(df_estoque)
+                    progress_text = "Alterando preço..."
+                    my_bar = st.progress(0, text=progress_text)
+
+                    for percent_complete in range(100):
+                        time.sleep(0.01)
+                        my_bar.progress(percent_complete + 1, text=progress_text)
+                    time.sleep(1)
+                    my_bar.empty()
+                    st.success(f"✅ Preço de '{produto_selecionado}' atualizado com sucesso!")
+                    time.sleep(2)
+
+                    st.rerun()  # 🔁 recarrega a página automaticamente
 
     # ---------------- CADASTRO DE NOVO PRODUTO ----------------
     st.markdown("---")
@@ -57,16 +95,53 @@ def pagina_ajuste_estoque():
     novo_produto = st.selectbox("Selecione um produto para cadastrar:", df_faltantes["descricao"].tolist())
 
     if novo_produto:
-        unidade = df_faltantes.loc[df_faltantes["descricao"] == novo_produto, "unidade_de_medida"].values[0]
-        quantidade = st.number_input(f"Informe a quantidade inicial ({unidade}):", min_value=0.0, step=1.0, key="nova_quantidade")
 
+        col_qtd, col_preco = st.columns(2)
+
+        with col_qtd:
+
+            unidade = df_faltantes.loc[df_faltantes["descricao"] == novo_produto, "unidade_de_medida"].values[0]
+            quantidade = st.number_input(f"Informe a quantidade inicial ({unidade}):", min_value=0.0, step=1.0, key="nova_quantidade")
+
+        with col_preco:  
+            # Padronizando como deve ser informado o preco do produto
+            if unidade == 'g':
+                texto_unidade_preco = 'Informe o preço (R$) para cada quilograma (Kg)'
+            elif unidade == 'mL':
+                texto_unidade_preco = 'Informe o preço (R$) para cada litro (L)'
+            elif unidade == 'Kg':
+                texto_unidade_preco = 'Informe o preço (R$) para cada quilograma (Kg)'
+            elif unidade == 'L':
+                texto_unidade_preco = 'Informe o preço (R$) para cada litro (L)'
+            elif unidade == 'Un':
+                texto_unidade_preco = 'Informe o preço (R$) para cada unidade (Un)'
+            else:
+                texto_unidade_preco = f'informe em {unidade}'
+
+            preco = st.number_input(f"{texto_unidade_preco}:", min_value=0.0, step=1.0, key="valor_produto",format="%.2f")
+        
         if st.button("Cadastrar Produto", key="btn_cadastrar_novo"):
-            novo_registro = pd.DataFrame([{
+            if preco <= 0 or quantidade <= 0:
+                st.error("⚠️ A quantidade e o preço devem ser maiores que zero para cadastrar um novo produto.")
+                return
+            else:
+                novo_registro = pd.DataFrame([{
                 "produto": novo_produto,
                 "quantidade_disponivel": quantidade,
-                "unidade": unidade
+                "unidade": unidade,
+                "preco": preco
             }])
-            df_estoque = pd.concat([df_estoque, novo_registro], ignore_index=True)
-            salvar_estoque(df_estoque)
-            st.success(f"✅ Produto '{novo_produto}' cadastrado com sucesso no estoque!")
-            st.experimental_rerun()  # 🔁 recarrega automaticamente após cadastro
+                df_estoque = pd.concat([df_estoque, novo_registro], ignore_index=True)
+                salvar_estoque(df_estoque)
+                progress_text = "Cadastrando novo produto..."
+                my_bar = st.progress(0, text=progress_text)
+
+                for percent_complete in range(100):
+                    time.sleep(0.01)
+                    my_bar.progress(percent_complete + 1, text=progress_text)
+                time.sleep(1)
+                my_bar.empty()
+                st.success(f"✅ Produto '{novo_produto}' cadastrado com sucesso no estoque!")
+                time.sleep(2)
+                st.rerun()  # 🔁 recarrega automaticamente após cadastro
+    
