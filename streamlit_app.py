@@ -7,6 +7,8 @@ from app_pages.ajuste_estoque import pagina_ajuste_estoque as page_estoque
 def main():
     st.set_page_config(page_title="Sistema de Controle de Estoque", layout="wide")
 
+    st.sidebar.image('images\logo_estancia_fundo_preto.jpg',width=150)
+
     st.sidebar.title("Navegação")
     pagina = st.sidebar.radio("Ir para:", ("Consulta de Receitas", "Cadastro de Receitas","Alteração de Estoque"))
 
@@ -19,3 +21,24 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+    st.markdown(
+    """
+    <style>
+    .footer {
+        position: fixed;
+        bottom: 0;
+        width: 100%;
+        text-align: center;
+        padding: 10px 0;
+        background-color: transparent;
+        color: #808080;
+        font-size: 14px;
+    }
+    </style>
+    <div class="footer">
+        © 2025 Nexus Tech - Todos os direitos reservados
+    </div>
+    """,
+    unsafe_allow_html=True
+    )
