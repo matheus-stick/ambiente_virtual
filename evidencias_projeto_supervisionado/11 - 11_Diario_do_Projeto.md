@@ -2,7 +2,7 @@
 
 ##
 - Inicio do trabalho: 20h00
-- Finalização do trabalho: 21h30
+- Finalização do trabalho: 21h40
 
 ## Mudanças no projeto
 - Continuação da inclusão de preços nos produtos do estoque. Agora na aba de alteração de estoque tem a possibilidade de preencher com um novo produto ou alterar um já existente, informando o preço em cada um dos casos. Essa alteração já muda diretamente o excel que é consumido pelo sistema.
