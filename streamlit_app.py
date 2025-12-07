@@ -1,5 +1,5 @@
 import streamlit as st
-from app_pages.receitas import pagina_consulta_receitas as page_consultas
+from app_pages.consulta_receitas import pagina_consulta_receitas as page_consultas
 from app_pages.receitas_cadastro import pagina_cadastro_receitas as page_saidas
 from app_pages.ajuste_estoque import pagina_ajuste_estoque as page_estoque
 
