@@ -75,7 +75,7 @@ def pagina_cadastro_receitas():
         elif unidade == 'L':
             texto_unidade = 'informe em mililitros (ml)'
         elif unidade == 'Un':
-            texto_unidade = 'informe em unidades (Un)'
+            texto_unidade = 'informe em gramas (g)'
         else:
             texto_unidade = f'informe em {unidade}'
 

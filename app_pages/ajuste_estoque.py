@@ -114,15 +114,15 @@ def pagina_ajuste_estoque():
             elif unidade == 'L':
                 texto_unidade_preco = 'Informe o preço (R$) para cada litro (L)'
             elif unidade == 'Un':
-                texto_unidade_preco = 'Informe o preço (R$) para cada unidade (Un)'
+                texto_unidade_preco = 'Informe o preço (R$) para cada quilograma (Kg)'
             else:
                 texto_unidade_preco = f'informe em {unidade}'
 
             preco = st.number_input(f"{texto_unidade_preco}:", min_value=0.0, step=1.0, key="valor_produto",format="%.2f")
         
         if st.button("Cadastrar Produto", key="btn_cadastrar_novo"):
-            if preco <= 0 or quantidade <= 0:
-                st.error("⚠️ A quantidade e o preço devem ser maiores que zero para cadastrar um novo produto.")
+            if preco <= 0:
+                st.error("⚠️ O preço deve ser maior que zero para cadastrar um novo produto.")
                 return
             else:
                 novo_registro = pd.DataFrame([{
