@@ -7,7 +7,7 @@ from app_pages.ajuste_estoque import pagina_ajuste_estoque as page_estoque
 def main():
     st.set_page_config(page_title="Sistema de Controle de Estoque", layout="wide")
 
-    st.sidebar.image('images\logo_estancia_fundo_preto.jpg',width=150)
+    st.sidebar.image("images/logo_estancia_fundo_preto.jpg", width=150)
 
     st.sidebar.title("Navegação")
     pagina = st.sidebar.radio("Ir para:", ("Consulta de Receitas", "Cadastro de Receitas","Alteração de Estoque"))
