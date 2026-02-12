@@ -101,13 +101,7 @@ def pagina_ajuste_estoque():
                 if df_semelhantes.empty:
                     st.caption("Nenhum semelhante encontrado.")
                 else:
-                    cols = ["produto", "unidade", "quantidade_disponivel"]
-                    if "preco" in df_semelhantes.columns:
-                        cols.append("preco")
-                    if "quantidade_embalagem" in df_semelhantes.columns:
-                        cols.append("quantidade_embalagem")
-
-                    df_semelhantes = df_semelhantes[cols].sort_values("produto")
+                    df_semelhantes = df_semelhantes.sort_values("produto")
                     st.dataframe(df_semelhantes, use_container_width=True, height=260)
 
 
@@ -131,15 +125,14 @@ def pagina_ajuste_estoque():
 
                 with col_qtd:
                     st.write(f"📦 Quantidade atual de **{produto_selecionado}**: {qtd_atual} {unidade}")
-                    nova_qtd = st.number_input(
-                        f"Informe a nova quantidade ({unidade}):",
-                        min_value=0.0,
+                    alteracao_qtd = st.number_input(
+                        f"Informe a alteração no estoque ({unidade}):",
                         step=1.0,
-                        key="nova_qtd"
+                        key="alteracao_qtd"
                     )
 
-                    if st.button("Salvar alteração de nova quantidade", key="btn_salvar_existente_quantidade"):
-                        df_estoque.loc[df_estoque["produto"] == produto_selecionado, "quantidade_disponivel"] = nova_qtd
+                    if st.button("Salvar alteração de estoque quantidade", key="btn_salvar_existente_quantidade"):
+                        df_estoque.loc[df_estoque["produto"] == produto_selecionado, "quantidade_disponivel"] = df_estoque.loc[df_estoque["produto"] == produto_selecionado, "quantidade_disponivel"] + alteracao_qtd
                         salvar_estoque(df_estoque)
 
                         progress_text = "Alterando quantidade..."
@@ -151,7 +144,7 @@ def pagina_ajuste_estoque():
                         my_bar.empty()
 
                         st.success(f"✅ Quantidade de '{produto_selecionado}' atualizada com sucesso!")
-                        time.sleep(0.8)
+                        time.sleep(2)
                         st.rerun()
 
                 with col_preco:
@@ -190,7 +183,7 @@ def pagina_ajuste_estoque():
     col_a, col_b = st.columns(2)
 
     with col_a:
-        nome_produto_raw = st.text_input("Nome do produto (ex: farinha de trigo) (Clique ENTER para verificar a existência do produto no estoque.):", value="", key="cad_nome_produto")
+        nome_produto_raw = st.text_input("Nome do produto (ex: farinha de trigo) (Pressione ENTER para verificar a existência do produto no estoque.):", value="", key="cad_nome_produto")
         unidade = st.selectbox("Unidade:", ALLOWED_UNITS)
 
     with col_b:
