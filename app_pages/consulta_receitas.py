@@ -83,11 +83,11 @@ def pagina_consulta_receitas():
 
     cA, cB, cC, cD = st.columns(4)
     with cA:
-        tempo_minutos = st.number_input("Tempo de preparo (minutos):", min_value=0, max_value=60, step=5, value=60)
+        tempo_minutos = st.number_input("Tempo de preparo (horas):", min_value=0, max_value=24, step=1, value=1)
         custo_hora = st.number_input("Custo por hora de preparo (R$):", min_value=0.0, step=0.1, format="%.2f")
 
     with cB:
-        comissoes = st.number_input("Comissões (R$):", min_value=0.0, step=0.1, format="%.2f")
+        frete = st.number_input("Frete (R$):", min_value=0.0, step=0.1, format="%.2f")
     with cC:
         impostos = st.number_input("Impostos (R$):", min_value=0.0, step=0.1, format="%.2f")
     with cD:
@@ -97,7 +97,7 @@ def pagina_consulta_receitas():
     custo_tempo = (tempo_minutos / 60) * custo_hora if custo_hora > 0 and tempo_minutos > 0 else 0.0
 
     # Calcular valor final total (custo total do prato)
-    valor_final = preco_total + custo_tempo + comissoes + impostos + outros_custos
+    valor_final = preco_total + custo_tempo + frete + impostos + outros_custos
 
     # Mostrar resumo dos custos
     st.markdown("---")
@@ -109,7 +109,7 @@ def pagina_consulta_receitas():
     with c2:
         st.write(f"⏱️ **Custo de tempo:** R$ {custo_tempo:,.2f}")
     with c3:
-        st.write(f"💸 **Comissões:** R$ {comissoes:,.2f}")
+        st.write(f"🏍️ **Frete:** R$ {frete:,.2f}")
     with c4:
         st.write(f"🏛️ **Impostos:** R$ {impostos:,.2f}")
     with c5:

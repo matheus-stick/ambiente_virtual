@@ -129,7 +129,7 @@ def verificar_disponibilidade(
 
     for item in ingredientes:
         produto = item["produto"]
-        qtd_necessaria = float(item["quantidade"])
+        qtd_necessaria = int(item["quantidade"])
         unidade_receita = _norm_unit(item["unidade"])
 
         if unidade_receita not in ALLOWED_UNITS:
@@ -144,7 +144,7 @@ def verificar_disponibilidade(
             disponivel = False
             continue
 
-        qtd_disponivel = float(estoque_item["quantidade_disponivel"].values[0])
+        qtd_disponivel = int(estoque_item["quantidade_disponivel"].values[0])
         unidade_estoque = _norm_unit(estoque_item["unidade"].values[0])
 
         # conflito de unidade
@@ -222,17 +222,14 @@ def preco_receita(
 
     for item in ingredientes:
         produto = item["produto"]
-        qtd_necessaria = float(item["quantidade"])
-        unidade_receita = _norm_unit(item["unidade"])
-
+        qtd_necessaria = int(item["quantidade"])
         estoque_item = df_estoque[df_estoque["produto"] == produto]
+        unidade_embalagem = estoque_item['quantidade_embalagem'].values[0]
 
         if estoque_item.empty:
             resultados.append({
                 "Produto": produto,
                 "Quantidade Necessária": qtd_necessaria,
-                "Unidade (Receita)": unidade_receita,
-                "Unidade (Estoque)": None,
                 "Preço Base (R$)": 0.0,
                 "Custo da Porção (R$)": 0.0,
                 "Status": "❌ Produto não encontrado no estoque"
@@ -241,15 +238,14 @@ def preco_receita(
 
         unidade_estoque = _norm_unit(estoque_item["unidade"].values[0])
         preco_base = float(estoque_item["preco"].values[0])
+        preco_base_label = f'R$ {int(preco_base)}/{int(unidade_embalagem)}{unidade_estoque}'
 
         # validação de unidade (somente g/ml/un)
-        if unidade_receita not in ALLOWED_UNITS:
+        if unidade_estoque not in ALLOWED_UNITS:
             resultados.append({
                 "Produto": produto,
                 "Quantidade Necessária": qtd_necessaria,
-                "Unidade (Receita)": unidade_receita,
-                "Unidade (Estoque)": unidade_estoque,
-                "Preço Base (R$)": preco_base,
+                "Preço Base (R$)": preco_base_label,
                 "Custo da Porção (R$)": 0.0,
                 "Status": f"❌ Unidade inválida na receita (permitidas: {sorted(ALLOWED_UNITS)})"
             })
@@ -259,42 +255,27 @@ def preco_receita(
             resultados.append({
                 "Produto": produto,
                 "Quantidade Necessária": qtd_necessaria,
-                "Unidade (Receita)": unidade_receita,
-                "Unidade (Estoque)": unidade_estoque,
-                "Preço Base (R$)": preco_base,
+                "Preço Base (R$)": preco_base_label,
                 "Custo da Porção (R$)": 0.0,
                 "Status": f"❌ Unidade inválida no estoque (permitidas: {sorted(ALLOWED_UNITS)})"
             })
             continue
 
-        # conflito de unidade => não calcula para não gerar custo errado
-        if unidade_estoque != unidade_receita:
-            resultados.append({
-                "Produto": produto,
-                "Quantidade Necessária": qtd_necessaria,
-                "Unidade (Receita)": unidade_receita,
-                "Unidade (Estoque)": unidade_estoque,
-                "Preço Base (R$)": preco_base,
-                "Custo da Porção (R$)": 0.0,
-                "Status": "⚠️ Unidade divergente (não calculado)"
-            })
-            continue
+        custo_unitario = preco_base/unidade_embalagem
 
-        custo = preco_base * qtd_necessaria
+        custo = custo_unitario * qtd_necessaria
+
         preco_total += custo
 
         resultados.append({
             "Produto": produto,
             "Quantidade Necessária": qtd_necessaria,
-            "Unidade (Receita)": unidade_receita,
-            "Unidade (Estoque)": unidade_estoque,
-            "Preço Base (R$)": preco_base,
+            "Preço Base (R$)": preco_base_label,
             "Custo da Porção (R$)": custo,
             "Status": "✅ Ok"
         })
 
     df_resultado = pd.DataFrame(resultados)
     df_resultado["Custo da Porção (R$)"] = df_resultado["Custo da Porção (R$)"].round(2)
-    df_resultado["Preço Base (R$)"] = df_resultado["Preço Base (R$)"].round(2)
 
     return df_resultado, round(preco_total, 2)
