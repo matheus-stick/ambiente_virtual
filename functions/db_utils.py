@@ -2,6 +2,9 @@ import pandas as pd
 from unidecode import unidecode
 import os
 import json
+import streamlit as st
+from textwrap import dedent
+import html
 
 # ============================================================
 # UTILITÁRIOS DE PADRONIZAÇÃO
@@ -279,3 +282,56 @@ def preco_receita(
     df_resultado["Custo da Porção (R$)"] = df_resultado["Custo da Porção (R$)"].round(2)
 
     return df_resultado, round(preco_total, 2)
+
+# ============================================================
+# VISUAIS PERSONALIZADOS
+# ============================================================
+
+def card_metric(titulo, valor, prefixo_medida='R$'):
+    """
+    Objetivo: cria um card para uma metrica isolada usando html e não st padrão
+
+    Parâmetros: 
+        titulo: Texto que ficará escrito sobre o valor
+        valor: Valor informado com destaque no card
+        prefixo_medida: Informa o que será prefixo do card. R$ é o padrão
+    """
+    st.markdown(f"""
+    <div style="
+        background: linear-gradient(135deg, #1f2937, #111827);
+        padding: 12px;
+        border-radius: 14px;
+        text-align: center;
+    ">
+        <div style="font-size:14px; opacity:0.7;">{titulo}</div>
+        <div style="font-size:25px; font-weight:400;">{prefixo_medida} {valor}</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+def card_metric_big(titulo, valor, prefixo_medida="R$"):
+    """
+    Cria um card grande centralizado (HTML) para métricas.
+    - Centraliza vertical/horizontal
+    - Não quebra linha entre 'R$' e o valor
+    """
+
+    html = dedent(f"""
+    <div style="
+        width: 280px;
+        height: 430px;
+        background: linear-gradient(135deg, #14532d, #052e16);
+        border-radius: 14px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        text-align: center;
+        padding: 24px;
+        box-sizing: border-box;
+    ">
+        <div style="font-size: 14px; opacity: 0.7; margin-bottom: 12px; max-width: 220px; word-wrap: break-word;">{titulo}</div>
+        <div style="font-size: 34px; font-weight: 800; line-height: 1.1; white-space: nowrap;">{prefixo_medida} {valor}</div>
+    </div>
+    """).strip()
+
+    st.markdown(html, unsafe_allow_html=True)
