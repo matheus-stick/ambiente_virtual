@@ -137,7 +137,7 @@ def pagina_consulta_receitas():
         card_metric("Outros custos", f"{outros_custos:,.2f}")
 
     with c3:
-        st.markdown("#### 💰 Total")
+        st.markdown("#### 💰 Custo Total")
         card_metric_big(prato_escolhido.title(),valor_final)
         # st.success(
         #     f"💰 **Valor final estimado do prato '{prato_escolhido.title()}': "
