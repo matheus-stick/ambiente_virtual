@@ -1,7 +1,12 @@
 import streamlit as st
 import pandas as pd
 import altair as alt
-from functions.db_utils import load_receitas, preco_receita
+from functions.db_utils import (
+    load_receitas,
+    preco_receita,
+    card_metric,
+    card_metric_big,
+)
 
 
 def pagina_precificacao():
@@ -36,7 +41,7 @@ def pagina_precificacao():
 
     df_preco, preco_total = preco_receita(prato_individual)
 
-    st.write("#### Ingredientes e Custos")
+    st.write("### Detalhamento do Custo dos Ingredientes:")
     st.dataframe(df_preco, use_container_width=True, hide_index=True)
     st.success(
         f"💵 Custo total dos ingredientes de "
@@ -120,60 +125,67 @@ def pagina_precificacao():
     st.header("🧮 Custos Variáveis")
     st.write("Informe os custos adicionais que incidem sobre o lote.")
 
-    c1, c2, c3, c4 = st.columns(4)
+    c1, c2, c3 = st.columns(3)
 
     with c1:
-        impostos_pct = st.number_input(
-            "Impostos (%)", min_value=0.0, max_value=100.0,
-            step=0.5, value=0.0, format="%.2f", key="impostos_pct",
-        )
-    with c2:
-        frete = st.number_input(
-            "Frete (R$)", min_value=0.0, step=1.0, format="%.2f", key="frete",
-        )
-    with c3:
-        custo_hora = st.number_input(
-            "Custo por hora de trabalho (R$)", min_value=0.0,
-            step=1.0, format="%.2f", key="custo_hora",
-        )
-    with c4:
+        st.markdown("#### Entradas")
         horas_trabalho = st.number_input(
-            "Horas de trabalho", min_value=0.0,
-            step=0.5, value=1.0, format="%.1f", key="horas_trabalho",
+            "Tempo de preparo (horas):",
+            min_value=0,
+            max_value=24,
+            step=1,
+            value=1,
+            key="horas_trabalho",
         )
-
-    outros_custos = st.number_input(
-        "Outros custos (R$)", min_value=0.0, step=1.0, format="%.2f",
-        key="outros_custos",
-    )
+        custo_hora = st.number_input(
+            "Custo por hora de preparo (R$):",
+            min_value=0.0,
+            step=0.1,
+            format="%.2f",
+            key="custo_hora",
+        )
+        frete = st.number_input(
+            "Frete (R$):",
+            min_value=0.0,
+            step=0.1,
+            format="%.2f",
+            key="frete",
+        )
+        impostos = st.number_input(
+            "Impostos (R$):",
+            min_value=0.0,
+            step=0.1,
+            format="%.2f",
+            key="impostos",
+        )
+        outros_custos = st.number_input(
+            "Outros custos (R$):",
+            min_value=0.0,
+            step=0.1,
+            format="%.2f",
+            key="outros_custos",
+        )
 
     # ---------- totalização ----------
-    valor_impostos = custo_ingredientes_total * (impostos_pct / 100)
-    custo_mao_obra = custo_hora * horas_trabalho
-    custo_variavel_total = valor_impostos + frete + custo_mao_obra + outros_custos
+    custo_mao_obra = (
+        horas_trabalho * custo_hora
+        if custo_hora > 0 and horas_trabalho > 0
+        else 0.0
+    )
+    custo_variavel_total = impostos + frete + custo_mao_obra + outros_custos
     custo_total_lote = custo_ingredientes_total + custo_variavel_total
 
-    st.markdown("---")
-    st.subheader("📊 Resumo Geral de Custos do Lote")
+    with c2:
+        st.markdown("#### 📊 Resumo")
+        card_metric("Ingredientes", f"{custo_ingredientes_total:,.2f}")
+        card_metric("Custo de tempo", f"{custo_mao_obra:,.2f}")
+        card_metric("Frete", f"{frete:,.2f}")
+        card_metric("Impostos", f"{impostos:,.2f}")
+        card_metric("Outros custos", f"{outros_custos:,.2f}")
 
-    r1, r2, r3 = st.columns(3)
-    with r1:
-        st.metric("🧂 Ingredientes", f"R$ {custo_ingredientes_total:,.2f}")
-    with r2:
-        st.metric("📦 Custos Variáveis", f"R$ {custo_variavel_total:,.2f}")
-    with r3:
-        st.metric("💰 Custo Total do Lote", f"R$ {custo_total_lote:,.2f}")
-
-    with st.expander("🔎 Detalhamento dos custos variáveis"):
-        det1, det2, det3, det4 = st.columns(4)
-        with det1:
-            st.write(f"🏛️ **Impostos ({impostos_pct:.2f}%):** R$ {valor_impostos:,.2f}")
-        with det2:
-            st.write(f"🚚 **Frete:** R$ {frete:,.2f}")
-        with det3:
-            st.write(f"⏱️ **Mão de obra ({horas_trabalho:.1f}h × R$ {custo_hora:,.2f}):** R$ {custo_mao_obra:,.2f}")
-        with det4:
-            st.write(f"⚙️ **Outros custos:** R$ {outros_custos:,.2f}")
+    with c3:
+        st.markdown("#### 💰 Custo Total do Lote")
+        card_metric_big("Custo Total", custo_total_lote)
 
     # ================================================================
     # SEÇÃO 4 — Simulação de Margem por Receita e Global
@@ -181,7 +193,6 @@ def pagina_precificacao():
     st.markdown("---")
     st.header("📈 Simulação de Margem de Lucro")
 
-    # Distribuir custos variáveis proporcionalmente ao custo de ingredientes
     st.write(
         "Os custos variáveis são distribuídos proporcionalmente ao custo de "
         "ingredientes de cada receita."
@@ -247,21 +258,21 @@ def pagina_precificacao():
     st.markdown("---")
     st.subheader("🏁 Resultado Final do Lote")
 
+    margem_global = (
+        ((total_receita_lote / custo_total_lote) - 1) * 100
+        if custo_total_lote > 0
+        else 0
+    )
+
     f1, f2, f3 = st.columns(3)
     with f1:
-        st.metric("💰 Custo Total", f"R$ {custo_total_lote:,.2f}")
+        card_metric("Custo Total", f"{custo_total_lote:,.2f}")
     with f2:
-        st.metric("🛒 Receita Total (Venda)", f"R$ {total_receita_lote:,.2f}")
+        card_metric("Receita Total (Venda)", f"{total_receita_lote:,.2f}")
     with f3:
-        margem_global = (
-            ((total_receita_lote / custo_total_lote) - 1) * 100
-            if custo_total_lote > 0
-            else 0
-        )
-        st.metric(
-            "📈 Lucro Bruto",
-            f"R$ {lucro_total:,.2f}",
-            delta=f"{margem_global:,.1f}% de margem",
+        card_metric(
+            f"Lucro Bruto ({margem_global:,.1f}%)",
+            f"{lucro_total:,.2f}",
         )
 
     # ---------- gráfico de preços de venda ----------
@@ -291,7 +302,7 @@ def pagina_precificacao():
                 align="center",
                 baseline="bottom",
                 dy=-5,
-                fontSize=14,
+                fontSize=18,
                 font="monospace",
                 color="#73a40a",
             )
