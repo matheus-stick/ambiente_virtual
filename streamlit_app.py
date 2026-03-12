@@ -2,6 +2,7 @@ import streamlit as st
 from app_pages.consulta_receitas import pagina_consulta_receitas as page_consultas
 from app_pages.receitas_cadastro import pagina_cadastro_receitas as page_saidas
 from app_pages.ajuste_estoque import pagina_ajuste_estoque as page_estoque
+from app_pages.precificacao import pagina_precificacao as page_precificacao
 
 # ---------------- STREAMLIT ----------------
 def main():
@@ -10,12 +11,14 @@ def main():
     st.sidebar.image("images/logo_estancia_fundo_preto.jpg", width=150)
 
     st.sidebar.title("Navegação")
-    pagina = st.sidebar.radio("Ir para:", ("Consulta de Receitas", "Cadastro de Receitas","Alteração de Estoque"))
+    pagina = st.sidebar.radio("Ir para:", ("Consulta de Receitas", "Cadastro de Receitas", "Precificação", "Alteração de Estoque"))
 
     if pagina == "Consulta de Receitas":
         page_consultas()
     elif pagina == "Cadastro de Receitas":
         page_saidas()
+    elif pagina == "Precificação":
+        page_precificacao()
     elif pagina == "Alteração de Estoque":
         page_estoque()
 
