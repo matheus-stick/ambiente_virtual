@@ -1,28 +1,33 @@
 import pandas as pd
-import openpyxl
 from unidecode import unidecode
 import os
 import json
 import streamlit as st
+from textwrap import dedent
+import html
 
 # ============================================================
 # UTILITÁRIOS DE PADRONIZAÇÃO
 # ============================================================
 
+ALLOWED_UNITS = {"g", "ml", "un"}
+
 def _norm(s: str) -> str:
     """Normaliza string: minúsculo, sem acento, sem espaços extras."""
     return unidecode((str(s) or "").strip().lower())
 
-# ============================================================
-# CARREGAMENTO DE BASES
-# ============================================================
+def _norm_col(c: str) -> str:
+    return unidecode(str(c)).strip().lower().replace(" ", "_")
 
-def load_dim_produtos(file_path='data/dim_produtos.xlsx'):
-    """Carrega e padroniza a planilha de produtos."""
-    dim_produto = pd.read_excel(file_path, index_col=False)
-    dim_produto.columns = [unidecode(col).lower().replace(" ", "_") for col in dim_produto.columns]
-    return dim_produto
+def _norm_unit(u: str) -> str:
+    u = _norm(u)
+    # garante minúsculo e remove espaços
+    u = u.replace(".", "").strip()
+    return u
 
+# ============================================================
+# CARREGAMENTO DE RECEITAS
+# ============================================================
 
 def load_receitas(file_path="data/receitas.xlsx") -> dict:
     """Lê receitas do Excel e retorna um dicionário agrupado por prato."""
@@ -32,19 +37,25 @@ def load_receitas(file_path="data/receitas.xlsx") -> dict:
     df_receitas = pd.read_excel(file_path)
 
     # Normalizar colunas e texto
-    df_receitas.columns = [unidecode(c).strip().lower() for c in df_receitas.columns]
-    df_receitas['prato'] = df_receitas['prato'].map(_norm)
-    df_receitas['produto'] = df_receitas['produto'].map(_norm)
+    df_receitas.columns = [_norm_col(c) for c in df_receitas.columns]
+
+    # Esperado: prato, produto, quantidade, unidade
+    for col in ["prato", "produto", "quantidade", "unidade"]:
+        if col not in df_receitas.columns:
+            raise ValueError(f"Coluna obrigatória '{col}' não encontrada em {file_path}.")
+
+    df_receitas["prato"] = df_receitas["prato"].map(_norm)
+    df_receitas["produto"] = df_receitas["produto"].map(_norm)
+    df_receitas["unidade"] = df_receitas["unidade"].map(_norm_unit)
 
     receitas = {}
-
-    for prato in df_receitas['prato'].unique():
-        subset = df_receitas[df_receitas['prato'] == prato]
+    for prato in df_receitas["prato"].unique():
+        subset = df_receitas[df_receitas["prato"] == prato]
         ingredientes = []
         for _, row in subset.iterrows():
             ingredientes.append({
                 "produto": row["produto"],
-                "quantidade": row["quantidade"],
+                "quantidade": float(row["quantidade"]),
                 "unidade": row["unidade"]
             })
         receitas[prato] = ingredientes
@@ -60,16 +71,56 @@ def salvar_receitas_json(file_path_excel="data/receitas.xlsx", file_path_json="d
     return file_path_json
 
 # ============================================================
-# FUNÇÃO PRINCIPAL DE VERIFICAÇÃO DE ESTOQUE
+# ESTOQUE (BASE ÚNICA)
 # ============================================================
 
-def verificar_disponibilidade(prato: str, estoque_path="data/estoque_inicial.xlsx", receitas_path="data/receitas.xlsx"):
-    # Normalizar nome do prato
+ESTOQUE_PATH = "data/estoque_inicial.xlsx"
+
+def carregar_estoque(path=ESTOQUE_PATH, sheet_name="Sheet1"):
+    """Carrega e padroniza o arquivo de estoque."""
+    if not os.path.exists(path):
+        return pd.DataFrame(columns=["produto", "quantidade_disponivel", "unidade", "preco", "quantidade_embalagem"])
+
+    df = pd.read_excel(path, sheet_name=sheet_name)
+    df.columns = [_norm_col(c) for c in df.columns]
+
+    # Colunas mínimas esperadas
+    required = {"produto", "quantidade_disponivel", "unidade"}
+    missing = required - set(df.columns)
+    if missing:
+        raise ValueError(f"Faltam colunas obrigatórias no estoque ({path}): {sorted(missing)}")
+
+    df["produto"] = df["produto"].map(_norm)
+    df["unidade"] = df["unidade"].map(_norm_unit)
+
+    # validação de unidade (somente g/ml/un)
+    unidades_invalidas = sorted(set(df["unidade"].dropna()) - ALLOWED_UNITS)
+    if unidades_invalidas:
+        raise ValueError(
+            f"Unidades inválidas encontradas no estoque: {unidades_invalidas}. "
+            f"Permitidas: {sorted(ALLOWED_UNITS)}"
+        )
+
+    return df
+
+
+def salvar_estoque(df, path=ESTOQUE_PATH, sheet_name="Sheet1"):
+    """Salva o DataFrame atualizado no arquivo Excel."""
+    df.to_excel(path, sheet_name=sheet_name, index=False)
+
+# ============================================================
+# VERIFICAÇÃO DE DISPONIBILIDADE (RECEITA x ESTOQUE)
+# ============================================================
+
+def verificar_disponibilidade(
+    prato: str,
+    estoque_path=ESTOQUE_PATH,
+    receitas_path="data/receitas.xlsx",
+    sheet_path="Sheet1"
+):
     prato = _norm(prato)
 
-    # Carregar estoque e receitas0.00
-    df_estoque = pd.read_excel(estoque_path)
-    df_estoque['produto'] = df_estoque['produto'].map(_norm)
+    df_estoque = carregar_estoque(estoque_path, sheet_name=sheet_path)
     receitas = load_receitas(receitas_path)
 
     if prato not in receitas:
@@ -81,82 +132,90 @@ def verificar_disponibilidade(prato: str, estoque_path="data/estoque_inicial.xls
 
     for item in ingredientes:
         produto = item["produto"]
-        qtd_necessaria = item["quantidade"]
-        unidade = item["unidade"]
+        qtd_necessaria = int(item["quantidade"])
+        unidade_receita = _norm_unit(item["unidade"])
+
+        if unidade_receita not in ALLOWED_UNITS:
+            resultado.append(f"❌ Unidade inválida na receita para {produto}: '{unidade_receita}'")
+            disponivel = False
+            continue
 
         estoque_item = df_estoque[df_estoque["produto"] == produto]
 
         if estoque_item.empty:
-            resultado.append(f"❌ {produto} não encontrado no estoque (0/{qtd_necessaria} {unidade})")
+            resultado.append(f"❌ {produto} não encontrado no estoque (0/{qtd_necessaria} {unidade_receita})")
             disponivel = False
+            continue
+
+        qtd_disponivel = int(estoque_item["quantidade_disponivel"].values[0])
+        unidade_estoque = _norm_unit(estoque_item["unidade"].values[0])
+
+        # conflito de unidade
+        if unidade_estoque != unidade_receita:
+            resultado.append(
+                f"⚠️ {produto}: unidade divergente (estoque: {unidade_estoque} vs receita: {unidade_receita})"
+            )
+            disponivel = False
+            continue
+
+        if qtd_disponivel >= qtd_necessaria:
+            resultado.append(f"✅ {produto}: disponível ({qtd_disponivel}/{qtd_necessaria} {unidade_receita})")
         else:
-            qtd_disponivel = estoque_item["quantidade_disponivel"].values[0]
-            if qtd_disponivel >= qtd_necessaria:
-                resultado.append(f"✅ {produto}: disponível ({qtd_disponivel}/{qtd_necessaria} {unidade})")
-            else:
-                resultado.append(f"⚠️ {produto}: insuficiente ({qtd_disponivel}/{qtd_necessaria} {unidade})")
-                disponivel = False
+            resultado.append(f"⚠️ {produto}: insuficiente ({qtd_disponivel}/{qtd_necessaria} {unidade_receita})")
+            disponivel = False
 
     return disponivel, resultado
 
 # ============================================================
-# FUNÇÃO PRINCIPAL DE ALTERAÇÃO DE ESTOQUE
+# PRODUTOS FALTANTES NO ESTOQUE (COM BASE NAS RECEITAS)
 # ============================================================
 
-# Caminho do arquivo de estoque
-ESTOQUE_PATH = "data/estoque_inicial.xlsx"
-
-# ---------------- FUNÇÕES AUXILIARES ----------------
-
-def carregar_estoque(path="data/estoque_inicial.xlsx"):
-    """Carrega e padroniza o arquivo de estoque."""
-    if not os.path.exists(path):
-        return pd.DataFrame(columns=["produto", "quantidade_disponivel", "unidade"])
-    
-    df = pd.read_excel(path)
-    df.columns = [unidecode(c).strip().lower().replace(" ", "_") for c in df.columns]
-    df["produto"] = df["produto"].map(_norm)
-    return df
-
-
-def salvar_estoque(df, path="data/estoque_inicial.xlsx"):
-    """Salva o DataFrame atualizado no arquivo Excel."""
-    df.to_excel(path, index=False)
-
-
-def produtos_faltantes_no_estoque(dim_path="data/dim_produtos.xlsx", estoque_path="data/estoque_inicial.xlsx"):
-    """Retorna os produtos da dimensão que ainda não estão no estoque."""
-    if not os.path.exists(dim_path):
-        return []
-
-    df_dim = pd.read_excel(dim_path)
-    df_dim.columns = [unidecode(c).strip().lower().replace(" ", "_") for c in df_dim.columns]
-    df_dim["descricao"] = df_dim["descricao"].map(_norm)
-    df_dim["unidade_de_medida"] = df_dim["unidade_de_medida"].map(str)
-
-    df_estoque = carregar_estoque(estoque_path)
-
-    # Identificar produtos que ainda não estão no estoque
-    produtos_no_estoque = set(df_estoque["produto"].tolist())
-    produtos_faltantes = df_dim[~df_dim["descricao"].isin(produtos_no_estoque)]
-
-    return produtos_faltantes[["descricao", "unidade_de_medida"]]
-
-def preco_receita(prato: str, receitas_path="data/receitas.xlsx", estoque_path="data/estoque_inicial.xlsx"):
+def produtos_faltantes_no_estoque_por_receitas(
+    receitas_path="data/receitas.xlsx",
+    estoque_path=ESTOQUE_PATH,
+    sheet_name="Sheet1"
+):
     """
-    Calcula o preço total de uma receita com base nas quantidades e preços do estoque.
-    Regras:
-    - Se a unidade for g/ml -> preço informado é por Kg ou L, logo dividir por 1000.
-    - Se a unidade for Kg/L/Un -> preço informado já é por unidade de venda.
+    Retorna produtos citados nas receitas que não existem no estoque.
+    (Substitui a função antiga que dependia do dim_produtos.)
+    """
+    receitas = load_receitas(receitas_path)
+    df_estoque = carregar_estoque(estoque_path, sheet_name=sheet_name)
+
+    produtos_estoque = set(df_estoque["produto"].tolist())
+
+    faltantes = set()
+    for prato, ingredientes in receitas.items():
+        for ing in ingredientes:
+            if ing["produto"] not in produtos_estoque:
+                faltantes.add(ing["produto"])
+
+    return sorted(faltantes)
+
+# ============================================================
+# CUSTO DA RECEITA (SEM Kg/L)
+# ============================================================
+
+def preco_receita(
+    prato: str,
+    receitas_path="data/receitas.xlsx",
+    estoque_path=ESTOQUE_PATH,
+    sheet_path="Sheet1"
+):
+    """
+    Calcula o custo total de uma receita com base nas quantidades e preços do estoque.
+
+    Regras novas (somente g/ml/un):
+    - 'preco' no estoque deve estar no MESMO referencial da unidade (preço por g, por ml, ou por unidade).
+    - Se a unidade da receita divergir da unidade do estoque para o produto -> marca conflito e custo 0 daquele item.
     """
     prato = _norm(prato)
     receitas = load_receitas(receitas_path)
-    df_estoque = carregar_estoque(estoque_path)
+    df_estoque = carregar_estoque(estoque_path, sheet_name=sheet_path)
 
     if prato not in receitas:
         raise ValueError(f"Receita '{prato}' não encontrada.")
 
-    # Garantir coluna de preço existe
     if "preco" not in df_estoque.columns:
         raise ValueError("A coluna 'preco' não foi encontrada em estoque_inicial.xlsx.")
 
@@ -166,58 +225,113 @@ def preco_receita(prato: str, receitas_path="data/receitas.xlsx", estoque_path="
 
     for item in ingredientes:
         produto = item["produto"]
-        qtd_necessaria = float(item["quantidade"])
-        unidade_receita = str(item["unidade"]).strip().lower()
-
-        # Buscar produto no estoque
+        qtd_necessaria = int(item["quantidade"])
         estoque_item = df_estoque[df_estoque["produto"] == produto]
+        unidade_embalagem = estoque_item['quantidade_embalagem'].values[0]
 
         if estoque_item.empty:
             resultados.append({
                 "Produto": produto,
                 "Quantidade Necessária": qtd_necessaria,
-                "Unidade": unidade_receita,
-                "Custo da Porção (R$)": 0,
-                "Status": "❌ Produto não encontrado"
+                "Preço Base (R$)": 0.0,
+                "Custo da Porção (R$)": 0.0,
+                "Status": "❌ Produto não encontrado no estoque"
             })
             continue
 
-        preco_cheio = float(estoque_item["preco"].values[0])
-        unidade_estoque = str(estoque_item["unidade"].values[0]).strip().lower()
+        unidade_estoque = _norm_unit(estoque_item["unidade"].values[0])
+        preco_base = float(estoque_item["preco"].values[0])
+        preco_base_label = f'R$ {int(preco_base)}/{int(unidade_embalagem)}{unidade_estoque}'
 
-        if unidade_estoque in ["kg", "l", "Un"]:
-            preco_base = preco_cheio  # preço por Kg ou L
-        elif unidade_estoque in ["g", "ml"]:
-            preco_base = preco_cheio / 1000  # converter para preço por g ou ml
+        # validação de unidade (somente g/ml/un)
+        if unidade_estoque not in ALLOWED_UNITS:
+            resultados.append({
+                "Produto": produto,
+                "Quantidade Necessária": qtd_necessaria,
+                "Preço Base (R$)": preco_base_label,
+                "Custo da Porção (R$)": 0.0,
+                "Status": f"❌ Unidade inválida na receita (permitidas: {sorted(ALLOWED_UNITS)})"
+            })
+            continue
 
-        # ---------------- CONVERSÃO DE UNIDADE ----------------
-        # Caso 1: preço informado por Kg ou L
-        if unidade_estoque in ["kg", "l"]:
-            custo = preco_base * (qtd_necessaria / 1000)
+        if unidade_estoque not in ALLOWED_UNITS:
+            resultados.append({
+                "Produto": produto,
+                "Quantidade Necessária": qtd_necessaria,
+                "Preço Base (R$)": preco_base_label,
+                "Custo da Porção (R$)": 0.0,
+                "Status": f"❌ Unidade inválida no estoque (permitidas: {sorted(ALLOWED_UNITS)})"
+            })
+            continue
 
-        # Caso 2: preço informado por grama ou mililitro (menos comum)
-        elif unidade_estoque in ["g", "ml"]:
-            custo = preco_base * qtd_necessaria
+        custo_unitario = preco_base/unidade_embalagem
 
-        # Caso 3: preço informado por unidade
-        elif unidade_estoque in ["un"]:
-            custo = preco_base * qtd_necessaria
-
-        else:
-            custo = preco_base * qtd_necessaria  # fallback genérico
+        custo = custo_unitario * qtd_necessaria
 
         preco_total += custo
 
         resultados.append({
             "Produto": produto,
             "Quantidade Necessária": qtd_necessaria,
-            "Unidade": unidade_receita,
+            "Preço Base (R$)": preco_base_label,
             "Custo da Porção (R$)": custo,
             "Status": "✅ Ok"
         })
 
-    # Converter para DataFrame para exibir no Streamlit
     df_resultado = pd.DataFrame(resultados)
     df_resultado["Custo da Porção (R$)"] = df_resultado["Custo da Porção (R$)"].round(2)
 
     return df_resultado, round(preco_total, 2)
+
+# ============================================================
+# VISUAIS PERSONALIZADOS
+# ============================================================
+
+def card_metric(titulo, valor, prefixo_medida='R$'):
+    """
+    Objetivo: cria um card para uma metrica isolada usando html e não st padrão
+
+    Parâmetros: 
+        titulo: Texto que ficará escrito sobre o valor
+        valor: Valor informado com destaque no card
+        prefixo_medida: Informa o que será prefixo do card. R$ é o padrão
+    """
+    st.markdown(f"""
+    <div style="
+        background: linear-gradient(135deg, #1f2937, #111827);
+        padding: 12px;
+        border-radius: 14px;
+        text-align: center;
+    ">
+        <div style="font-size:14px; opacity:0.7;">{titulo}</div>
+        <div style="font-size:25px; font-weight:400;">{prefixo_medida} {valor}</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+def card_metric_big(titulo, valor, prefixo_medida="R$"):
+    """
+    Cria um card grande centralizado (HTML) para métricas.
+    - Centraliza vertical/horizontal
+    - Não quebra linha entre 'R$' e o valor
+    """
+
+    html = dedent(f"""
+    <div style="
+        width: 280px;
+        height: 430px;
+        background: linear-gradient(135deg, #14532d, #052e16);
+        border-radius: 14px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        text-align: center;
+        padding: 24px;
+        box-sizing: border-box;
+    ">
+        <div style="font-size: 14px; opacity: 0.7; margin-bottom: 12px; max-width: 220px; word-wrap: break-word;">{titulo}</div>
+        <div style="font-size: 34px; font-weight: 800; line-height: 1.1; white-space: nowrap;">{prefixo_medida} {valor}</div>
+    </div>
+    """).strip()
+
+    st.markdown(html, unsafe_allow_html=True)

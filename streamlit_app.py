@@ -8,7 +8,7 @@ from app_pages.precificacao import pagina_precificacao as page_precificacao
 def main():
     st.set_page_config(page_title="Sistema de Controle de Estoque", layout="wide")
 
-    st.sidebar.image("images/logo_estancia_fundo_preto.jpg", width=150)
+    st.sidebar.image("images/logo_soulfit_fundo_branco.jpeg", width=150)
 
     st.sidebar.title("Navegação")
     pagina = st.sidebar.radio("Ir para:", ("Consulta de Receitas", "Cadastro de Receitas", "Precificação", "Alteração de Estoque"))

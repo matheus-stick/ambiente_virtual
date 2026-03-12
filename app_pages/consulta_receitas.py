@@ -6,7 +6,9 @@ from functions.db_utils import (
     load_receitas,
     preco_receita,
     carregar_estoque,
-    salvar_estoque
+    salvar_estoque,
+    card_metric,
+    card_metric_big
 )
 
 # ---------------- STREAMLIT ----------------
@@ -81,41 +83,66 @@ def pagina_consulta_receitas():
     st.markdown("---")
     st.subheader("🧮 Custos Adicionais para Precificação Completa")
 
-    cA, cB, cC, cD = st.columns(4)
-    with cA:
-        tempo_minutos = st.number_input("Tempo de preparo (minutos):", min_value=0, max_value=60, step=5, value=60)
-        custo_hora = st.number_input("Custo por hora de preparo (R$):", min_value=0.0, step=0.1, format="%.2f")
+    c1, c2, c3 = st.columns(3)
 
-    with cB:
-        comissoes = st.number_input("Comissões (R$):", min_value=0.0, step=0.1, format="%.2f")
-    with cC:
-        impostos = st.number_input("Impostos (R$):", min_value=0.0, step=0.1, format="%.2f")
-    with cD:
-        outros_custos = st.number_input("Outros custos (R$):", min_value=0.0, step=0.1, format="%.2f")
-
-    # Calcular custo de tempo proporcional
-    custo_tempo = (tempo_minutos / 60) * custo_hora if custo_hora > 0 and tempo_minutos > 0 else 0.0
-
-    # Calcular valor final total (custo total do prato)
-    valor_final = preco_total + custo_tempo + comissoes + impostos + outros_custos
-
-    # Mostrar resumo dos custos
-    st.markdown("---")
-    st.subheader("📊 Resumo da Precificação")
-
-    c1, c2, c3, c4, c5 = st.columns(5)
     with c1:
-        st.write(f"🧂 **Ingredientes:** R$ {preco_total:,.2f}")
-    with c2:
-        st.write(f"⏱️ **Custo de tempo:** R$ {custo_tempo:,.2f}")
-    with c3:
-        st.write(f"💸 **Comissões:** R$ {comissoes:,.2f}")
-    with c4:
-        st.write(f"🏛️ **Impostos:** R$ {impostos:,.2f}")
-    with c5:
-        st.write(f"⚙️ **Outros custos:** R$ {outros_custos:,.2f}")
+        st.markdown("#### Entradas")
+        tempo_horas = st.number_input(
+            "Tempo de preparo (horas):",
+            min_value=0,
+            max_value=24,
+            step=1,
+            value=1,
+            key="tempo_horas"
+        )
+        custo_hora = st.number_input(
+            "Custo por hora de preparo (R$):",
+            min_value=0.0,
+            step=0.1,
+            format="%.2f",
+            key="custo_hora"
+        )
+        frete = st.number_input(
+            "Frete (R$):",
+            min_value=0.0,
+            step=0.1,
+            format="%.2f",
+            key="frete"
+        )
+        impostos = st.number_input(
+            "Impostos (R$):",
+            min_value=0.0,
+            step=0.1,
+            format="%.2f",
+            key="impostos"
+        )
+        outros_custos = st.number_input(
+            "Outros custos (R$):",
+            min_value=0.0,
+            step=0.1,
+            format="%.2f",
+            key="outros_custos"
+        )
 
-    st.success(f"💰 **Valor final estimado do prato '{prato_escolhido.title()}': R$ {valor_final:,.2f}**")
+    # Cálculos (fora das colunas OK — não renderiza UI)
+    custo_tempo = tempo_horas * custo_hora if custo_hora > 0 and tempo_horas > 0 else 0.0
+    valor_final = preco_total + custo_tempo + frete + impostos + outros_custos
+
+    with c2:
+        st.markdown("#### 📊 Resumo")
+        card_metric("Ingredientes", f"{preco_total:,.2f}")
+        card_metric("Custo de tempo", f"{custo_tempo:,.2f}")
+        card_metric("Frete", f"{frete:,.2f}")
+        card_metric("Impostos", f"{impostos:,.2f}")
+        card_metric("Outros custos", f"{outros_custos:,.2f}")
+
+    with c3:
+        st.markdown("#### 💰 Custo Total")
+        card_metric_big(prato_escolhido.title(),valor_final)
+        # st.success(
+        #     f"💰 **Valor final estimado do prato '{prato_escolhido.title()}': "
+        #     f"R$ {valor_final:,.2f}**"
+        # )
 
     # ---------------- TABELA/GRÁFICO DE MARGENS DE LUCRO ----------------
     st.markdown("---")
