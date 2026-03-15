@@ -1,316 +1,190 @@
-import streamlit as st
-import pandas as pd
 import altair as alt
-from functions.db_utils import (
-    load_receitas,
-    preco_receita,
-    card_metric,
-    card_metric_big,
-)
+import pandas as pd
+import streamlit as st
+
+from functions.db_utils import load_receitas, preco_receita, card_metric_big
+
+
+def _formatar_nome_receita(nome: str) -> str:
+    return nome.title()
+
+
+def _resumir_receita(df_receita: pd.DataFrame) -> tuple[int, pd.DataFrame]:
+    df_resumo = df_receita[
+        ["Produto", "Quantidade Necessária", "Preço Base (R$)", "Custo da Porção (R$)"]
+    ].copy()
+    total_ingredientes = (
+        int(df_resumo["Quantidade Necessária"].sum()) if not df_resumo.empty else 0
+    )
+    df_resumo["Custo da Porção (R$)"] = df_resumo["Custo da Porção (R$)"].map(
+        lambda x: f"R$ {x:,.2f}"
+    )
+    return total_ingredientes, df_resumo
 
 
 def pagina_precificacao():
     st.title("💰 Precificação de Receitas")
     st.info(
-        "Calcule o custo de produção das suas receitas, adicione custos variáveis "
-        "e simule margens de lucro — individualmente ou em massa."
+        "Acompanhe o custo das receitas de forma individual ou em massa, com foco no impacto dos ingredientes."
     )
 
-    # ----------------------------------------------------------------
-    # Carregar receitas disponíveis
-    # ----------------------------------------------------------------
     receitas = load_receitas("data/receitas.xlsx")
     if not receitas:
-        st.warning(
-            "⚠️ Nenhuma receita cadastrada. Cadastre uma receita antes de precificar."
-        )
+        st.warning("⚠️ Nenhuma receita cadastrada. Cadastre uma receita antes de precificar.")
         return
 
     pratos = list(receitas.keys())
-
-    # ================================================================
-    # SEÇÃO 1 — Consulta Individual de Receita
-    # ================================================================
-    st.header("🔍 Consulta Individual de Receita")
-
-    prato_individual = st.selectbox(
-        "Selecione uma receita para ver o detalhamento:",
-        pratos,
-        key="prec_individual",
+    aba_massa, aba_individual = st.tabs(
+        ["📦 Precificação em Massa", "🍽️ Precificação Individual"]
     )
 
-    df_preco, preco_total = preco_receita(prato_individual)
+    with aba_individual:
+        st.subheader("Precificação Individual")
+        prato_individual = st.selectbox(
+            "Selecione uma receita específica:",
+            pratos,
+            key="prec_individual",
+        )
 
-    st.write("### Detalhamento do Custo dos Ingredientes:")
-    st.dataframe(df_preco, use_container_width=True, hide_index=True)
-    st.success(
-        f"💵 Custo total dos ingredientes de "
-        f"**{prato_individual.title()}**: **R$ {preco_total:,.2f}**"
-    )
+        df_preco, preco_total = preco_receita(prato_individual)
+        df_individual = df_preco[
+            ["Produto", "Quantidade Necessária", "Preço Base (R$)", "Custo da Porção (R$)"]
+        ].copy()
+        df_individual["Custo da Porção (R$)"] = df_individual[
+            "Custo da Porção (R$)"
+        ].round(2)
 
-    # ================================================================
-    # SEÇÃO 2 — Precificação em Massa
-    # ================================================================
-    st.markdown("---")
-    st.header("📦 Precificação em Massa")
-    st.write(
-        "Selecione várias receitas, defina a quantidade de cada uma e calcule "
-        "o custo total de produção de todo o lote."
-    )
+        c1, c2 = st.columns([3, 1])
+        with c1:
+            st.write(f"### Ingredientes de {_formatar_nome_receita(prato_individual)}")
+            st.dataframe(df_individual, use_container_width=True, hide_index=True)
+        with c2:
+            st.metric("Preço total do prato", f"R$ {preco_total:,.2f}")
+            st.metric("Ingredientes na receita", len(df_individual))
+            # st.metric(
+            #     "Quantidade total",
+            #     int(df_individual["Quantidade Necessária"].sum())
+            #     if not df_individual.empty
+            #     else 0,
+            # )
 
-    # ---------- seleção de receitas ----------
-    receitas_selecionadas = st.multiselect(
-        "Selecione as receitas para o lote:",
-        pratos,
-        key="prec_massa",
-    )
+    with aba_massa:
+        st.subheader("Precificação em Massa")
+        receitas_selecionadas = st.multiselect(
+            "Selecione as receitas para o lote:",
+            pratos,
+            key="prec_massa",
+        )
 
-    if not receitas_selecionadas:
-        st.warning("Selecione ao menos uma receita para continuar.")
-        return
+        if not receitas_selecionadas:
+            st.warning("Selecione ao menos uma receita para continuar.")
+        else:
+            dados_receitas: dict[str, dict] = {}
+            for receita in receitas_selecionadas:
+                df_receita, preco_prato = preco_receita(receita)
+                total_ingredientes, df_resumo = _resumir_receita(df_receita)
+                dados_receitas[receita] = {
+                    "df_resumo": df_resumo,
+                    "preco_prato": preco_prato,
+                    "qtd_ingredientes_total": total_ingredientes,
+                    "qtd_itens": len(df_receita),
+                }
 
-    # ---------- quantidades por receita ----------
-    st.subheader("📝 Quantidades por Receita")
-    cols_qtd = st.columns(min(len(receitas_selecionadas), 4))
+            for receita in receitas_selecionadas:
+                dados = dados_receitas[receita]
+                with st.expander(
+                    f"{_formatar_nome_receita(receita)} • custo R$ {dados['preco_prato']:,.2f} • "
+                    f"{dados['qtd_itens']} ingredientes"
+                ):
+                    topo1, topo2 = st.columns(2)
+                    with topo1:
+                        st.caption(f"Preço de custo: R$ {dados['preco_prato']:,.2f}")
+                    with topo2:
+                        st.caption(
+                            f"Quantidade total de ingredientes: {dados['qtd_ingredientes_total']}"
+                        )
 
-    quantidades: dict[str, int] = {}
-    for idx, receita in enumerate(receitas_selecionadas):
-        with cols_qtd[idx % len(cols_qtd)]:
-            quantidades[receita] = st.number_input(
-                f"{receita.title()}",
-                min_value=1,
-                value=1,
-                step=1,
-                key=f"qtd_{receita}",
+                    st.dataframe(
+                        dados["df_resumo"],
+                        use_container_width=True,
+                        hide_index=True,
+                        height=min(245, 70 + len(dados["df_resumo"]) * 35),
+                    )
+
+            st.markdown("---")
+
+            st.write("Informe quantos pratos de cada receita serão produzidos.")
+            cols_qtd = st.columns(min(len(receitas_selecionadas), 3))
+            quantidades: dict[str, int] = {}
+            for idx, receita in enumerate(receitas_selecionadas):
+                with cols_qtd[idx % len(cols_qtd)]:
+                    quantidades[receita] = st.number_input(
+                        f"{_formatar_nome_receita(receita)}",
+                        min_value=1,
+                        value=1,
+                        step=1,
+                        key=f"qtd_{receita}",
+                    )
+
+            dados_lote: list[dict] = []
+            total_lote = 0.0
+
+            for receita in receitas_selecionadas:
+                dados = dados_receitas[receita]
+                qtd_pratos = quantidades[receita]
+                custo_total_receita = dados["preco_prato"] * qtd_pratos
+                qtd_ingredientes_total = dados["qtd_ingredientes_total"] * qtd_pratos
+                total_lote += custo_total_receita
+
+                dados_lote.append(
+                    {
+                        "Receita": _formatar_nome_receita(receita),
+                        "Quantidade de pratos": qtd_pratos,
+                        "Custo unitário (R$)": round(dados["preco_prato"], 2),
+                        "Valor total (R$)": round(custo_total_receita, 2),
+                        "Qtd. ingredientes total": int(qtd_ingredientes_total),
+                        "Rótulo": f"{qtd_ingredientes_total} itens • R$ {custo_total_receita:,.2f}",
+                    }
+                )
+
+            df_lote = pd.DataFrame(dados_lote).sort_values(
+                "Valor total (R$)", ascending=False
             )
 
-    # ---------- calcular custos de ingredientes ----------
-    dados_lote: list[dict] = []
-    custo_ingredientes_total = 0.0
+            col_preco_total, col_grafico = st.columns([1.05, 1.2])
 
-    for receita in receitas_selecionadas:
-        df_r, custo_unitario = preco_receita(receita)
-        qtd = quantidades[receita]
-        custo_linha = custo_unitario * qtd
+            with col_preco_total:
+                card_metric_big(
+                    "Custo total do lote",
+                    f"R$ {total_lote:,.2f}"
+                )
 
-        dados_lote.append(
-            {
-                "Receita": receita.title(),
-                "Custo Unitário (R$)": custo_unitario,
-                "Quantidade": qtd,
-                "Custo Total (R$)": round(custo_linha, 2),
-            }
-        )
-        custo_ingredientes_total += custo_linha
+            with col_grafico:
+                st.write("#### Impacto por receita no total")
+                base = alt.Chart(df_lote).encode(
+                    y=alt.Y("Receita:N", sort="-x", title=None),
+                    x=alt.X("Valor total (R$)", title="Valor total (R$)"),
+                    tooltip=[
+                        alt.Tooltip("Receita:N"),
+                        alt.Tooltip("Quantidade de pratos:Q"),
+                        alt.Tooltip(
+                            "Qtd. ingredientes total:Q", title="Qtd. ingredientes"
+                        ),
+                        alt.Tooltip("Valor total (R$):Q", format=",.2f"),
+                    ],
+                )
 
-    df_lote = pd.DataFrame(dados_lote)
+                barras = base.mark_bar(
+                    color="#2f7d32", cornerRadiusEnd=6, size=28
+                )
+                texto = base.mark_text(
+                    align="left",
+                    baseline="middle",
+                    dx=8,
+                    color="#1f2937",
+                ).encode(text="Rótulo:N")
 
-    st.write("#### Resumo do Lote")
-    st.dataframe(df_lote, use_container_width=True, hide_index=True)
-    st.success(
-        f"🧂 **Custo total de ingredientes do lote:** R$ {custo_ingredientes_total:,.2f}"
-    )
-
-    # ---------- detalhamento por receita (expansível) ----------
-    with st.expander("📋 Ver detalhamento de ingredientes por receita"):
-        for receita in receitas_selecionadas:
-            df_det, _ = preco_receita(receita)
-            st.write(f"**{receita.title()}**")
-            st.dataframe(df_det, use_container_width=True, hide_index=True)
-
-    # ================================================================
-    # SEÇÃO 3 — Custos Variáveis
-    # ================================================================
-    st.markdown("---")
-    st.header("🧮 Custos Variáveis")
-    st.write("Informe os custos adicionais que incidem sobre o lote.")
-
-    c1, c2, c3 = st.columns(3)
-
-    with c1:
-        st.markdown("#### Entradas")
-        horas_trabalho = st.number_input(
-            "Tempo de preparo (horas):",
-            min_value=0,
-            max_value=24,
-            step=1,
-            value=1,
-            key="horas_trabalho",
-        )
-        custo_hora = st.number_input(
-            "Custo por hora de preparo (R$):",
-            min_value=0.0,
-            step=0.1,
-            format="%.2f",
-            key="custo_hora",
-        )
-        frete = st.number_input(
-            "Frete (R$):",
-            min_value=0.0,
-            step=0.1,
-            format="%.2f",
-            key="frete",
-        )
-        impostos = st.number_input(
-            "Impostos (R$):",
-            min_value=0.0,
-            step=0.1,
-            format="%.2f",
-            key="impostos",
-        )
-        outros_custos = st.number_input(
-            "Outros custos (R$):",
-            min_value=0.0,
-            step=0.1,
-            format="%.2f",
-            key="outros_custos",
-        )
-
-    # ---------- totalização ----------
-    custo_mao_obra = (
-        horas_trabalho * custo_hora
-        if custo_hora > 0 and horas_trabalho > 0
-        else 0.0
-    )
-    custo_variavel_total = impostos + frete + custo_mao_obra + outros_custos
-    custo_total_lote = custo_ingredientes_total + custo_variavel_total
-
-    with c2:
-        st.markdown("#### 📊 Resumo")
-        card_metric("Ingredientes", f"{custo_ingredientes_total:,.2f}")
-        card_metric("Custo de tempo", f"{custo_mao_obra:,.2f}")
-        card_metric("Frete", f"{frete:,.2f}")
-        card_metric("Impostos", f"{impostos:,.2f}")
-        card_metric("Outros custos", f"{outros_custos:,.2f}")
-
-    with c3:
-        st.markdown("#### 💰 Custo Total do Lote")
-        card_metric_big("Custo Total", custo_total_lote)
-
-    # ================================================================
-    # SEÇÃO 4 — Simulação de Margem por Receita e Global
-    # ================================================================
-    st.markdown("---")
-    st.header("📈 Simulação de Margem de Lucro")
-
-    st.write(
-        "Os custos variáveis são distribuídos proporcionalmente ao custo de "
-        "ingredientes de cada receita."
-    )
-
-    # ---------- margem por receita ----------
-    st.subheader("🎯 Margem por Receita")
-
-    dados_margem: list[dict] = []
-    total_receita_lote = 0.0
-
-    for item in dados_lote:
-        receita_nome = item["Receita"]
-        custo_ingr = item["Custo Total (R$)"]
-
-        # proporção do custo de ingredientes
-        proporcao = (
-            custo_ingr / custo_ingredientes_total
-            if custo_ingredientes_total > 0
-            else 0
-        )
-        custo_var_rateado = custo_variavel_total * proporcao
-        custo_total_receita = custo_ingr + custo_var_rateado
-
-        margem = st.slider(
-            f"Margem de lucro para **{receita_nome}** (%)",
-            min_value=0,
-            max_value=200,
-            value=30,
-            step=1,
-            key=f"margem_{receita_nome}",
-        )
-
-        preco_venda = custo_total_receita * (1 + margem / 100)
-        lucro = preco_venda - custo_total_receita
-        qtd = item["Quantidade"]
-        preco_venda_unitario = preco_venda / qtd if qtd > 0 else 0
-
-        dados_margem.append(
-            {
-                "Receita": receita_nome,
-                "Qtd": qtd,
-                "Custo Ingredientes (R$)": round(custo_ingr, 2),
-                "Custos Var. Rateados (R$)": round(custo_var_rateado, 2),
-                "Custo Total (R$)": round(custo_total_receita, 2),
-                "Margem (%)": margem,
-                "Preço Venda Total (R$)": round(preco_venda, 2),
-                "Preço Venda Unitário (R$)": round(preco_venda_unitario, 2),
-                "Lucro (R$)": round(lucro, 2),
-            }
-        )
-        total_receita_lote += preco_venda
-
-    df_margem = pd.DataFrame(dados_margem)
-
-    st.markdown("---")
-    st.subheader("📋 Tabela Final de Precificação")
-    st.dataframe(df_margem, use_container_width=True, hide_index=True)
-
-    # ---------- resultado global ----------
-    lucro_total = total_receita_lote - custo_total_lote
-
-    st.markdown("---")
-    st.subheader("🏁 Resultado Final do Lote")
-
-    margem_global = (
-        ((total_receita_lote / custo_total_lote) - 1) * 100
-        if custo_total_lote > 0
-        else 0
-    )
-
-    f1, f2, f3 = st.columns(3)
-    with f1:
-        card_metric("Custo Total", f"{custo_total_lote:,.2f}")
-    with f2:
-        card_metric("Receita Total (Venda)", f"{total_receita_lote:,.2f}")
-    with f3:
-        card_metric(
-            f"Lucro Bruto ({margem_global:,.1f}%)",
-            f"{lucro_total:,.2f}",
-        )
-
-    # ---------- gráfico de preços de venda ----------
-    if len(df_margem) > 1:
-        st.markdown("---")
-        st.subheader("📊 Visualização de Preços de Venda por Receita")
-
-        chart = (
-            alt.Chart(df_margem)
-            .mark_bar(color="#73a40a")
-            .encode(
-                x=alt.X("Receita:N", title="Receita", sort="-y"),
-                y=alt.Y("Preço Venda Total (R$):Q", title="Preço de Venda (R$)"),
-                tooltip=[
-                    alt.Tooltip("Receita:N"),
-                    alt.Tooltip("Custo Total (R$):Q", format=",.2f"),
-                    alt.Tooltip("Preço Venda Total (R$):Q", format=",.2f"),
-                    alt.Tooltip("Lucro (R$):Q", format=",.2f"),
-                ],
-            )
-            .properties(width="container", height=400)
-        )
-
-        text = (
-            alt.Chart(df_margem)
-            .mark_text(
-                align="center",
-                baseline="bottom",
-                dy=-5,
-                fontSize=18,
-                font="monospace",
-                color="#73a40a",
-            )
-            .encode(
-                x=alt.X("Receita:N", sort="-y"),
-                y="Preço Venda Total (R$):Q",
-                text=alt.Text("Preço Venda Total (R$):Q", format=",.2f"),
-            )
-        )
-
-        st.altair_chart(chart + text, use_container_width=True)
+                st.altair_chart(
+                    (barras + texto).properties(height=max(220, len(df_lote) * 70)),
+                    use_container_width=True,
+                )

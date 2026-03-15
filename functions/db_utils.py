@@ -298,7 +298,7 @@ def card_metric(titulo, valor, prefixo_medida='R$'):
     """
     st.markdown(f"""
     <div style="
-        background: linear-gradient(135deg, #1f2937, #111827);
+        background: linear-gradient(135deg, #f9ecf2, #ec548c);
         padding: 12px;
         border-radius: 14px;
         text-align: center;
@@ -319,7 +319,7 @@ def card_metric_big(titulo, valor, prefixo_medida="R$"):
     <div style="
         width: 280px;
         height: 430px;
-        background: linear-gradient(135deg, #14532d, #052e16);
+        background: linear-gradient(135deg, #f9ecf2, #ec548c);
         border-radius: 14px;
         display: flex;
         flex-direction: column;
@@ -329,7 +329,7 @@ def card_metric_big(titulo, valor, prefixo_medida="R$"):
         padding: 24px;
         box-sizing: border-box;
     ">
-        <div style="font-size: 14px; opacity: 0.7; margin-bottom: 12px; max-width: 220px; word-wrap: break-word;">{titulo}</div>
+        <div style="font-size: 24px; opacity: 0.7; margin-bottom: 12px; max-width: 220px; word-wrap: break-word;">{titulo}</div>
         <div style="font-size: 34px; font-weight: 800; line-height: 1.1; white-space: nowrap;">{prefixo_medida} {valor}</div>
     </div>
     """).strip()
