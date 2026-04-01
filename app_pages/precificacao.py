@@ -14,7 +14,7 @@ def _resumir_receita(df_receita: pd.DataFrame) -> tuple[int, pd.DataFrame]:
         ["Produto", "Quantidade Necessária", "Preço Base (R$)", "Custo da Porção (R$)"]
     ].copy()
     total_ingredientes = (
-        int(df_resumo["Quantidade Necessária"].sum()) if not df_resumo.empty else 0
+        int(df_resumo["Produto"].count()) if not df_resumo.empty else 0
     )
     df_resumo["Custo da Porção (R$)"] = df_resumo["Custo da Porção (R$)"].map(
         lambda x: f"R$ {x:,.2f}"
@@ -156,7 +156,8 @@ def pagina_precificacao():
             with col_preco_total:
                 card_metric_big(
                     "Custo total do lote",
-                    f"R$ {total_lote:,.2f}"
+                    f"{total_lote:,.2f}",
+                    prefixo_medida="R$",
                 )
 
             with col_grafico:
@@ -167,15 +168,12 @@ def pagina_precificacao():
                     tooltip=[
                         alt.Tooltip("Receita:N"),
                         alt.Tooltip("Quantidade de pratos:Q"),
-                        alt.Tooltip(
-                            "Qtd. ingredientes total:Q", title="Qtd. ingredientes"
-                        ),
                         alt.Tooltip("Valor total (R$):Q", format=",.2f"),
                     ],
                 )
 
                 barras = base.mark_bar(
-                    color="#2f7d32", cornerRadiusEnd=6, size=28
+                    color="#EC548C", cornerRadiusEnd=6, size=28
                 )
                 texto = base.mark_text(
                     align="left",

@@ -287,7 +287,7 @@ def preco_receita(
 # VISUAIS PERSONALIZADOS
 # ============================================================
 
-def card_metric(titulo, valor, prefixo_medida='R$'):
+def card_metric(titulo, valor, prefixo_medida):
     """
     Objetivo: cria um card para uma metrica isolada usando html e não st padrão
 
@@ -308,7 +308,7 @@ def card_metric(titulo, valor, prefixo_medida='R$'):
     </div>
     """, unsafe_allow_html=True)
 
-def card_metric_big(titulo, valor, prefixo_medida="R$"):
+def card_metric_big(titulo, valor, prefixo_medida):
     """
     Cria um card grande centralizado (HTML) para métricas.
     - Centraliza vertical/horizontal

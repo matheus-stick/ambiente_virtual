@@ -21,10 +21,10 @@ def main():
     st.sidebar.markdown("### Navegação")
 
     pages = [
+        ("📦 Alteração de Estoque", page_estoque),
         ("📋 Consulta de Receitas", page_consultas),
         ("📝 Cadastro de Receitas", page_saidas),
         ("💲 Precificação", page_precificacao),
-        ("📦 Alteração de Estoque", page_estoque),
     ]
 
     if "active_page" not in st.session_state:
