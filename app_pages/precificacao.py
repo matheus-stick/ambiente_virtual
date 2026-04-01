@@ -1,12 +1,23 @@
 import altair as alt
+from datetime import datetime
+import time
 import pandas as pd
 import streamlit as st
 
 from functions.db_utils import load_receitas, preco_receita, card_metric_big
+from functions.orcamento_pdf import gerar_pdf_orcamento_lote, montar_orcamento_lote
 
 
 def _formatar_nome_receita(nome: str) -> str:
     return nome.title()
+
+
+def _normalizar_nome_cliente(valor: str) -> str:
+    return " ".join(str(valor).strip().split())
+
+
+def _normalizar_nome_cliente_arquivo(nome_cliente: str) -> str:
+    return _normalizar_nome_cliente(nome_cliente).replace(" ", "_")
 
 
 def _resumir_receita(df_receita: pd.DataFrame) -> tuple[int, pd.DataFrame]:
@@ -186,3 +197,50 @@ def pagina_precificacao():
                     (barras + texto).properties(height=max(220, len(df_lote) * 70)),
                     use_container_width=True,
                 )
+
+            st.markdown("---")
+            st.write("#### Exportação do orçamento")
+            st.caption(
+                "Gere um PDF com identidade visual da Soulfit contendo o detalhamento por receita e o total final do lote."
+            )
+            nome_cliente = st.text_input(
+                "Informe o nome e sobrenome do cliente:",
+                max_chars=30,
+                key="nome_cliente",
+                placeholder="Ex.: Ana Souza",
+            )
+
+            try:
+                dados_orcamento = montar_orcamento_lote(
+                    receitas_selecionadas=receitas_selecionadas,
+                    quantidades=quantidades,
+                )
+                area_feedback = st.empty()
+                nome_cliente = _normalizar_nome_cliente(nome_cliente)
+
+                if not nome_cliente:
+                    st.info("Preencha o nome e sobrenome do cliente para liberar o download.")
+                elif len(nome_cliente.split()) < 2:
+                    st.warning("Informe nome e sobrenome do cliente.")
+                else:
+                    pdf_bytes = gerar_pdf_orcamento_lote(dados_orcamento)
+                    prefixo_orcamento = "Orcamento_Soulfit"
+                    data_orcamento = datetime.now().strftime("%Y_%m_%d")
+                    nome_cliente_arquivo = _normalizar_nome_cliente_arquivo(nome_cliente)
+                    nome_arquivo = (
+                        f"{prefixo_orcamento}_{data_orcamento}_{nome_cliente_arquivo}.pdf"
+                    )
+
+                    clicou_download = st.download_button(
+                        "Baixar PDF do orçamento",
+                        data=pdf_bytes,
+                        file_name=nome_arquivo,
+                        mime="application/pdf",
+                        use_container_width=True,
+                    )
+                    if clicou_download:
+                        area_feedback.info("Download efetuado ☑️")
+                        time.sleep(2)
+                        area_feedback.empty()
+            except Exception as exc:
+                st.error(f"Não foi possível preparar o PDF para download: {exc}")

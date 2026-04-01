@@ -226,28 +226,31 @@ def preco_receita(
     for item in ingredientes:
         produto = item["produto"]
         qtd_necessaria = int(item["quantidade"])
+        unidade_receita = _norm_unit(item["unidade"])
         estoque_item = df_estoque[df_estoque["produto"] == produto]
-        unidade_embalagem = estoque_item['quantidade_embalagem'].values[0]
 
         if estoque_item.empty:
             resultados.append({
                 "Produto": produto,
                 "Quantidade Necessária": qtd_necessaria,
+                "Unidade": unidade_receita,
                 "Preço Base (R$)": 0.0,
                 "Custo da Porção (R$)": 0.0,
                 "Status": "❌ Produto não encontrado no estoque"
             })
             continue
 
+        unidade_embalagem = estoque_item["quantidade_embalagem"].values[0]
         unidade_estoque = _norm_unit(estoque_item["unidade"].values[0])
         preco_base = float(estoque_item["preco"].values[0])
-        preco_base_label = f'R$ {int(preco_base)}/{int(unidade_embalagem)}{unidade_estoque}'
+        preco_base_label = f"R$ {int(preco_base)}/{int(unidade_embalagem)}{unidade_estoque}"
 
         # validação de unidade (somente g/ml/un)
-        if unidade_estoque not in ALLOWED_UNITS:
+        if unidade_receita not in ALLOWED_UNITS:
             resultados.append({
                 "Produto": produto,
                 "Quantidade Necessária": qtd_necessaria,
+                "Unidade": unidade_receita,
                 "Preço Base (R$)": preco_base_label,
                 "Custo da Porção (R$)": 0.0,
                 "Status": f"❌ Unidade inválida na receita (permitidas: {sorted(ALLOWED_UNITS)})"
@@ -258,13 +261,25 @@ def preco_receita(
             resultados.append({
                 "Produto": produto,
                 "Quantidade Necessária": qtd_necessaria,
+                "Unidade": unidade_receita,
                 "Preço Base (R$)": preco_base_label,
                 "Custo da Porção (R$)": 0.0,
                 "Status": f"❌ Unidade inválida no estoque (permitidas: {sorted(ALLOWED_UNITS)})"
             })
             continue
 
-        custo_unitario = preco_base/unidade_embalagem
+        if unidade_estoque != unidade_receita:
+            resultados.append({
+                "Produto": produto,
+                "Quantidade Necessária": qtd_necessaria,
+                "Unidade": unidade_receita,
+                "Preço Base (R$)": preco_base_label,
+                "Custo da Porção (R$)": 0.0,
+                "Status": f"⚠️ Unidade divergente (estoque: {unidade_estoque} vs receita: {unidade_receita})"
+            })
+            continue
+
+        custo_unitario = preco_base / unidade_embalagem
 
         custo = custo_unitario * qtd_necessaria
 
@@ -273,6 +288,7 @@ def preco_receita(
         resultados.append({
             "Produto": produto,
             "Quantidade Necessária": qtd_necessaria,
+            "Unidade": unidade_receita,
             "Preço Base (R$)": preco_base_label,
             "Custo da Porção (R$)": custo,
             "Status": "✅ Ok"
