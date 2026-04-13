@@ -9,7 +9,7 @@ from functions.styles import set_sidebar_style
 
 
 def main():
-    st.set_page_config(page_title="Sistema de Controle de Estoque", layout="wide", initial_sidebar_state="expanded")
+    st.set_page_config(page_title="Sistema de Controle de Estoque", layout="centered", initial_sidebar_state="expanded")
 
     set_sidebar_style()
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 from io import BytesIO
 from pathlib import Path
 from typing import Any
+from datetime import date, timedelta
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
@@ -19,6 +20,10 @@ from reportlab.platypus import (
 )
 
 from functions.db_utils import preco_receita
+
+# Datas
+data_atual = date.today()
+semana_seguinte = data_atual + timedelta(weeks=1)
 
 
 SOULFIT_CORES = {
@@ -94,6 +99,31 @@ def montar_orcamento_lote(
         "receitas": receitas_orcamento,
         "valor_total_geral": round(valor_total_geral, 2),
     }
+
+
+def montar_preview_pdf_imagens(
+    pdf_bytes: bytes,
+    zoom: float = 1.6,
+) -> list[bytes]:
+    try:
+        import fitz
+    except ImportError as exc:
+        raise RuntimeError(
+            "Biblioteca PyMuPDF não instalada para gerar a pré-visualização."
+        ) from exc
+
+    imagens_paginas: list[bytes] = []
+    # Abre o PDF.
+    with fitz.open(stream=pdf_bytes, filetype="pdf") as documento:
+        # Define a escala.
+        matriz = fitz.Matrix(zoom, zoom)
+        for pagina in documento:
+            # Renderiza a página.
+            pixmap = pagina.get_pixmap(matrix=matriz, alpha=False)
+            # Exporta em PNG.
+            imagens_paginas.append(pixmap.tobytes("png"))
+
+    return imagens_paginas
 
 
 def gerar_pdf_orcamento_lote(dados_orcamento: dict[str, Any]) -> bytes:
@@ -174,6 +204,7 @@ def gerar_pdf_orcamento_lote(dados_orcamento: dict[str, Any]) -> bytes:
         elementos.append(Spacer(1, 6))
 
     elementos.append(Paragraph(dados_orcamento["titulo"], estilo_titulo))
+    elementos.append(Paragraph(f"Data do orçamento: {data_atual.strftime('%d/%m/%Y')} | Validade do orçamento: {semana_seguinte.strftime('%d/%m/%Y')}", estilo_meta))
     elementos.append(
         HRFlowable(
             width="100%",

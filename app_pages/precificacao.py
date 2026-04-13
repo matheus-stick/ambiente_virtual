@@ -5,7 +5,11 @@ import pandas as pd
 import streamlit as st
 
 from functions.db_utils import load_receitas, preco_receita, card_metric_big
-from functions.orcamento_pdf import gerar_pdf_orcamento_lote, montar_orcamento_lote
+from functions.orcamento_pdf import (
+    gerar_pdf_orcamento_lote,
+    montar_orcamento_lote,
+    montar_preview_pdf_imagens,
+)
 
 
 def _formatar_nome_receita(nome: str) -> str:
@@ -22,7 +26,12 @@ def _normalizar_nome_cliente_arquivo(nome_cliente: str) -> str:
 
 def _resumir_receita(df_receita: pd.DataFrame) -> tuple[int, pd.DataFrame]:
     df_resumo = df_receita[
-        ["Produto", "Quantidade Necessária", "Preço Base (R$)", "Custo da Porção (R$)"]
+        [
+            "Produto",
+            "Quantidade Necessária",
+            "Preço Base (R$)",
+            "Custo da Porção (R$)",
+        ]
     ].copy()
     total_ingredientes = (
         int(df_resumo["Produto"].count()) if not df_resumo.empty else 0
@@ -41,7 +50,7 @@ def pagina_precificacao():
 
     receitas = load_receitas("data/receitas.xlsx")
     if not receitas:
-        st.warning("⚠️ Nenhuma receita cadastrada. Cadastre uma receita antes de precificar.")
+        st.warning("Nenhuma receita cadastrada. Cadastre uma receita antes de precificar.")
         return
 
     pratos = list(receitas.keys())
@@ -59,7 +68,12 @@ def pagina_precificacao():
 
         df_preco, preco_total = preco_receita(prato_individual)
         df_individual = df_preco[
-            ["Produto", "Quantidade Necessária", "Preço Base (R$)", "Custo da Porção (R$)"]
+            [
+                "Produto",
+                "Quantidade Necessária",
+                "Preço Base (R$)",
+                "Custo da Porção (R$)",
+            ]
         ].copy()
         df_individual["Custo da Porção (R$)"] = df_individual[
             "Custo da Porção (R$)"
@@ -72,12 +86,6 @@ def pagina_precificacao():
         with c2:
             st.metric("Preço total do prato", f"R$ {preco_total:,.2f}")
             st.metric("Ingredientes na receita", len(df_individual))
-            # st.metric(
-            #     "Quantidade total",
-            #     int(df_individual["Quantidade Necessária"].sum())
-            #     if not df_individual.empty
-            #     else 0,
-            # )
 
     with aba_massa:
         st.subheader("Precificação em Massa")
@@ -199,48 +207,72 @@ def pagina_precificacao():
                 )
 
             st.markdown("---")
-            st.write("#### Exportação do orçamento")
-            st.caption(
-                "Gere um PDF com identidade visual da Soulfit contendo o detalhamento por receita e o total final do lote."
-            )
-            nome_cliente = st.text_input(
-                "Informe o nome e sobrenome do cliente:",
-                max_chars=30,
-                key="nome_cliente",
-                placeholder="Ex.: Ana Souza",
-            )
+            st.write("#### Geração do orçamento")
+            c1, c2 = st.columns([2, 2])
+            with c1:
+                nome_cliente = st.text_input(
+                    "Informe o nome e sobrenome do cliente:",
+                    max_chars=30,
+                    key="nome_cliente",
+                    placeholder="Ex.: Ana Souza",
+                )
 
             try:
                 dados_orcamento = montar_orcamento_lote(
                     receitas_selecionadas=receitas_selecionadas,
                     quantidades=quantidades,
                 )
+                # Reaproveita os bytes.
+                pdf_bytes = gerar_pdf_orcamento_lote(dados_orcamento)
                 area_feedback = st.empty()
                 nome_cliente = _normalizar_nome_cliente(nome_cliente)
 
-                if not nome_cliente:
-                    st.info("Preencha o nome e sobrenome do cliente para liberar o download.")
-                elif len(nome_cliente.split()) < 2:
-                    st.warning("Informe nome e sobrenome do cliente.")
-                else:
-                    pdf_bytes = gerar_pdf_orcamento_lote(dados_orcamento)
-                    prefixo_orcamento = "Orcamento_Soulfit"
-                    data_orcamento = datetime.now().strftime("%Y_%m_%d")
-                    nome_cliente_arquivo = _normalizar_nome_cliente_arquivo(nome_cliente)
-                    nome_arquivo = (
-                        f"{prefixo_orcamento}_{data_orcamento}_{nome_cliente_arquivo}.pdf"
-                    )
+                with c2:
+                    if not nome_cliente:
+                        st.info(
+                            "O preview já está disponível. Preencha nome e sobrenome para liberar o download."
+                        )
+                    elif len(nome_cliente.split()) < 2:
+                        st.warning("Informe nome e sobrenome do cliente.")
+                    else:
+                        st.markdown("<br>", unsafe_allow_html=True) 
+                        prefixo_orcamento = "Orcamento_Soulfit"
+                        data_orcamento = datetime.now().strftime("%Y_%m_%d")
+                        nome_cliente_arquivo = _normalizar_nome_cliente_arquivo(nome_cliente)
+                        nome_arquivo = (
+                            f"{prefixo_orcamento}_{data_orcamento}_{nome_cliente_arquivo}.pdf"
+                        )
 
-                    clicou_download = st.download_button(
-                        "Baixar PDF do orçamento",
-                        data=pdf_bytes,
-                        file_name=nome_arquivo,
-                        mime="application/pdf",
-                        use_container_width=True,
-                    )
-                    if clicou_download:
-                        area_feedback.info("Download efetuado ☑️")
-                        time.sleep(2)
-                        area_feedback.empty()
+                        clicou_download = st.download_button(
+                            "📩 Baixar PDF do orçamento.",
+                            data=pdf_bytes,
+                            file_name=nome_arquivo,
+                            mime="application/pdf",
+                            use_container_width=True
+                        )
+                        if clicou_download:
+                            area_feedback.info("Download efetuado ☑️")
+                            time.sleep(2)
+                            area_feedback.empty()
+
+                # Mostra o preview.
+                st.write("#### Pré-visualização do orçamento")
+                with st.expander("Clique para expandir o preview do PDF gerado"):
+                    st.caption("As imagens abaixo correspondem ao PDF final do orçamento.")
+                    try:
+                        # Gera as páginas.
+                        preview_paginas = montar_preview_pdf_imagens(pdf_bytes)
+                        for pagina_idx, pagina_bytes in enumerate(preview_paginas, start=1):
+                            # Exibe a página.
+                            st.image(
+                                pagina_bytes,
+                                caption=f"Página {pagina_idx}",
+                                use_column_width=True,
+                            )
+                    except Exception as preview_exc:
+                        st.error(
+                            f"Não foi possível renderizar a pré-visualização do PDF: {preview_exc}"
+                        )
+
             except Exception as exc:
-                st.error(f"Não foi possível preparar o PDF para download: {exc}")
+                st.error(f"Não foi possível preparar o PDF para visualização ou download: {exc}")
